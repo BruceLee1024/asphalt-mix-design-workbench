@@ -1,0 +1,59 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-app-bg: #0D0D11;
+  --color-surface: #16161C;
+  --color-surface2: #1E1E27;
+  --color-surface3: #252530;
+  --color-border: #2E2E3A;
+  --color-border2: #3A3A48;
+  --color-amber: #F5A623;
+  --color-amber2: #FFCA6A;
+  --color-amber-dim: #7A4E08;
+  --color-amber-glow: rgba(245,166,35,0.18);
+  --color-steel: #6B7FA3;
+  --color-text1: #EEEEF5;
+  --color-text2: #9090A8;
+  --color-text3: #565668;
+  --color-green: #3DDC84;
+  --color-yellow: #F5C842;
+  --color-red: #FF6B6B;
+  --color-blue: #5B9CF6;
+  --color-purple: #9B7FFF;
+
+  --font-mono: 'JetBrains Mono', 'Courier New', monospace;
+  --font-sans: 'Noto Sans SC', 'PingFang SC', system-ui, sans-serif;
+}
+
+body {
+  background-color: var(--color-app-bg);
+  color: var(--color-text1);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbar for Workbench */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(86, 86, 104, 0.4);
+  border-radius: 4px;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(86, 86, 104, 0.7);
+}
+
+/* Print specific styles */
+@media print {
+  body {
+    background: white;
+    color: black;
+  }
+}
