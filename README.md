@@ -1,5 +1,14 @@
 # Asphalt Mix Design Workbench
 
+![Private](https://img.shields.io/badge/repository-private-555555)
+![React](https://img.shields.io/badge/react-19-61dafb)
+![TypeScript](https://img.shields.io/badge/typescript-5.x-3178c6)
+![Vite](https://img.shields.io/badge/vite-6.x-646cff)
+![Domain](https://img.shields.io/badge/domain-asphalt%20mix%20design-f5a623)
+![Standards](https://img.shields.io/badge/standards-JTG%20F40%20%7C%20JTG%203410-green)
+
+Tags: `asphalt` · `concrete` · `mix-design` · `marshall-test` · `gradation` · `oac` · `laboratory` · `react` · `typescript` · `vite`
+
 Professional asphalt concrete target mix design workbench for AC dense-graded mixtures. The app focuses on laboratory ledger management, aggregate gradation blending, Marshall test records, OAC analysis, performance verification, issue tracking, and formal report export.
 
 ## Features
