@@ -1262,6 +1262,7 @@ html {
 
 .acmix-page #features,
 .acmix-page #specs,
+.acmix-page #author,
 .acmix-page #cta-section {
   background: var(--ink);
 }
@@ -1737,6 +1738,132 @@ html {
   border: 1px solid rgba(232,147,26,0.2);
 }
 
+.acmix-page #author {
+  border-top: 1px solid rgba(44, 44, 58, 0.72);
+  border-bottom: 1px solid rgba(44, 44, 58, 0.72);
+}
+
+.acmix-page .author-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 390px);
+  gap: 72px;
+  align-items: center;
+  border: 1px solid var(--ac-border);
+  border-radius: 8px;
+  padding: 56px;
+  background:
+    linear-gradient(120deg, rgba(232, 147, 26, 0.1), transparent 42%),
+    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    var(--ink2);
+  background-size: auto, 42px 42px, 42px 42px, auto;
+  overflow: hidden;
+  position: relative;
+}
+
+.acmix-page .author-panel::after {
+  content: '';
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 40%;
+  background: radial-gradient(circle at 55% 45%, rgba(232, 147, 26, 0.16), transparent 58%);
+  pointer-events: none;
+}
+
+.acmix-page .author-copy,
+.acmix-page .author-qr-card {
+  position: relative;
+  z-index: 1;
+}
+
+.acmix-page .author-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.acmix-page .author-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 14px;
+  border: 1px solid rgba(245, 184, 74, 0.18);
+  border-radius: 6px;
+  background: rgba(10, 10, 13, 0.38);
+  color: var(--ac-light);
+  font-size: 13px;
+}
+
+.acmix-page .author-meta svg {
+  width: 16px;
+  height: 16px;
+  color: var(--ac-amber2);
+  stroke-width: 1.8;
+}
+
+.acmix-page .author-qr-card {
+  border: 1px solid rgba(245, 184, 74, 0.22);
+  border-radius: 8px;
+  padding: 22px;
+  background: rgba(10, 10, 13, 0.58);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.acmix-page .author-qr-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.acmix-page .author-qr-head span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ac-light);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.acmix-page .author-qr-head svg {
+  width: 17px;
+  height: 17px;
+  color: var(--ac-amber2);
+  stroke-width: 1.8;
+}
+
+.acmix-page .author-qr-head strong {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--ac-amber);
+}
+
+.acmix-page .author-qr-frame {
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.acmix-page .author-qr-frame img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  border-radius: 4px;
+}
+
+.acmix-page .author-qr-card p {
+  margin-top: 16px;
+  color: var(--ac-stone2);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
 .acmix-page #cta-section {
   text-align: center;
   padding: 160px 6vw;
@@ -1928,6 +2055,15 @@ html {
     grid-template-columns: repeat(2, 1fr);
   }
 
+  .acmix-page .author-panel {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+
+  .acmix-page .author-qr-card {
+    max-width: 420px;
+  }
+
   .acmix-page .nav-links {
     display: none;
   }
@@ -2016,6 +2152,22 @@ html {
   .acmix-page .hero-datastrip,
   .acmix-page .metrics-grid {
     grid-template-columns: 1fr;
+  }
+
+  .acmix-page .author-panel {
+    padding: 28px 22px;
+  }
+
+  .acmix-page .author-meta {
+    flex-direction: column;
+  }
+
+  .acmix-page .author-meta span {
+    width: 100%;
+  }
+
+  .acmix-page .author-qr-card {
+    padding: 16px;
   }
 
   .acmix-page .hds-canvas-wrap {

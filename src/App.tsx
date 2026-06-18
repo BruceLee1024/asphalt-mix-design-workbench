@@ -11,9 +11,12 @@ import {
   FileCheck2,
   FlaskConical,
   Layers3,
+  MessageCircle,
+  QrCode,
   Settings2,
   Sparkles,
   Target,
+  UserRound,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -32,6 +35,7 @@ function LandingPage({ onStart }: { onStart: () => void }) {
   const gradingCanvasRef = React.useRef<HTMLCanvasElement>(null);
   const marshallCanvasRef = React.useRef<HTMLCanvasElement>(null);
   const [navScrolled, setNavScrolled] = React.useState(false);
+  const authorQrSrc = `${import.meta.env.BASE_URL}author-wechat-qr.jpg`;
 
   React.useEffect(() => {
     const onScroll = () => setNavScrolled(window.scrollY > 60);
@@ -485,9 +489,36 @@ function LandingPage({ onStart }: { onStart: () => void }) {
         ['马歇尔稳定度 MS','kN','≥ 8.0','9.2','合格'],['流值 FL','0.1mm','20 ~ 40','31','合格'],['空隙率 VV','%','3 ~ 5','4.1','合格'],['矿料间隙率 VMA','%','≥ 15','15.5','合格'],['沥青饱和度 VFA','%','65 ~ 75','73.5','合格'],['击实次数（双面）','次','75（高速）/ 50（二级以下）','75','参考'],['试件标准高度','mm','63.5 ± 1.3','—','参考'],
       ].map(([a,b,c,d,e]) => <tr key={a}><td>{a}</td><td className="mono-cell">{b}</td><td>{c}</td><td className="amber-cell">{d}</td><td><span className={`spec-badge ${e === '合格' ? 'badge-ok' : 'badge-ref'}`}>{e}</span></td></tr>)}</tbody></table></div></div></section>
 
+      <section id="author" className="acmix-section">
+        <div className="container">
+          <div className="author-panel">
+            <div className="author-copy">
+              <div className="sec-label">作者信息</div>
+              <h2 className="sec-title">AI赛博土木<br />工程 AI 工具作者</h2>
+              <p className="sec-sub">专注工程造价、数据资产与 AI 工具化实践，把复杂工程流程做成可复用、可交付、可追溯的数字工具。</p>
+              <div className="author-meta">
+                <span><UserRound aria-hidden="true" /> 工程数字化工具作者</span>
+                <span><MessageCircle aria-hidden="true" /> 扫码交流与合作</span>
+              </div>
+            </div>
+
+            <div className="author-qr-card" aria-label="作者微信二维码">
+              <div className="author-qr-head">
+                <span><QrCode aria-hidden="true" /> 微信二维码</span>
+                <strong>SCAN</strong>
+              </div>
+              <div className="author-qr-frame">
+                <img src={authorQrSrc} alt="作者微信二维码" loading="lazy" />
+              </div>
+              <p>微信扫码添加作者，交流配合比设计、工程 AI 工具与项目数字化落地。</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section id="cta-section"><div className="container"><p className="cta-big">告别 Excel 手算<br /><em>让配合比设计回归专业</em></p><p className="cta-sub">无需安装，打开即用。规范内置，流程清晰，报告直接打印。</p><button type="button" onClick={onStart} className="btn-cta btn-cta-primary cta-main">立即免费使用 →</button><p className="cta-note">依据 JTG F40-2004 · 单文件 HTML · 无需网络</p></div></section>
 
-      <footer className="acmix-footer"><div className="foot-logo">AC<em>·</em>MIX</div><div className="foot-copy">依据 JTG F40-2004 《公路沥青路面施工技术规范》· AI赛博土木 出品</div><div className="foot-links"><button type="button" onClick={onStart}>使用工具</button><a href="#specs">规范文档</a><a href="#hero">回到顶部</a></div></footer>
+      <footer className="acmix-footer"><div className="foot-logo">AC<em>·</em>MIX</div><div className="foot-copy">依据 JTG F40-2004 《公路沥青路面施工技术规范》· AI赛博土木 出品</div><div className="foot-links"><button type="button" onClick={onStart}>使用工具</button><a href="#author">作者信息</a><a href="#specs">规范文档</a><a href="#hero">回到顶部</a></div></footer>
     </div>
   );
 }
