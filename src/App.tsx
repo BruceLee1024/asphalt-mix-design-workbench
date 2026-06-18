@@ -4,7 +4,17 @@ import { TopNav } from './components/layout/TopNav';
 import { Sidebar } from './components/layout/Sidebar';
 import { WorkspaceHeader } from './components/layout/WorkspaceHeader';
 import { AiPanel } from './components/layout/AiPanel';
-import { ArrowRight, Sparkles } from 'lucide-react';
+import {
+  ArrowRight,
+  BarChart3,
+  ClipboardCheck,
+  FileCheck2,
+  FlaskConical,
+  Layers3,
+  Settings2,
+  Sparkles,
+  Target,
+} from 'lucide-react';
 import { motion } from 'motion/react';
 
 import { ProjectLedgerStep } from './components/steps/ProjectLedgerStep';
@@ -380,16 +390,89 @@ function LandingPage({ onStart }: { onStart: () => void }) {
 
       <div className="ticker-wrap"><div className="ticker-inner">{['AC-13 细粒式沥青混凝土','·','AC-16 中粒式沥青混凝土','·','AC-20 中粒式沥青混凝土','·','AC-25 粗粒式沥青混凝土','·','SMA-13 骨架密实式','·','OGFC-13 开级配排水式','·','AC-13 细粒式沥青混凝土','·','AC-16 中粒式沥青混凝土','·','AC-20 中粒式沥青混凝土','·','AC-25 粗粒式沥青混凝土','·','SMA-13 骨架密实式','·','OGFC-13 开级配排水式','·'].map((x, i) => <span key={i} className={`ticker-item ${x === '·' ? 'ticker-sep' : ''}`}>{x}</span>)}</div></div>
 
-      <section id="process" className="acmix-section"><div className="container"><div className="sec-label">设计流程</div><h2 className="sec-title">五步完成<br />专业配合比设计</h2><p className="sec-sub">从原材料录入到验证报告，每一步都有规范约束，每一个数字都有出处。</p><div className="process-grid">
-        {[
-          ['STEP 01','🪨','基本参数设置','录入混合料类型、道路等级、原材料密度参数。系统自动匹配规范指标要求，沥青密度可按标号自动填充。'],
-          ['STEP 02','📊','矿料级配设计','输入各筛孔通过率，实时显示规范上下限带状区域。系统即时校验是否超出范围，同时计算理论最大密度。'],
-          ['STEP 03','⚗️','马歇尔试验录入','录入5组油石比下的稳定度、流值、VV、VMA、VFA数据。支持一键填入典型值用于验证流程。'],
-          ['STEP 04','🎯','最佳油石比计算','按四分法自动推导 OAC，输出密度、稳定度、空隙率和饱和度四面板图表。'],
-          ['STEP 05','✅','指标验证 & 报告','自动对照 JTG F40 规范进行指标判定，生成综合评价，一键输出可打印设计报告。'],
-          ['AI ASSIST','✦','AI 配合比分析','内置 AI 助手理解当前配合比数据，提供专业分析评语、优化建议和施工注意事项。'],
-        ].map(([idx, icon, title, desc], i) => <div key={title} className={`process-card ${i === 5 ? 'process-card-ai' : ''}`}><div className="pc-index">{idx}</div><div className="pc-icon">{icon}</div><div className="pc-title">{title}</div><div className="pc-desc">{desc}</div></div>)}
-      </div></div></section>
+      <section id="process" className="acmix-section">
+        <div className="container process-container">
+          <div className="sec-label">设计流程</div>
+          <div className="process-head">
+            <div>
+              <h2 className="sec-title">五步完成<br />专业配合比设计</h2>
+              <p className="sec-sub">从原材料录入到验证报告，每一步都有规范约束，每一个数字都有出处。</p>
+            </div>
+            <div className="process-summary" aria-label="流程能力摘要">
+              <div><strong>5</strong><span>设计节点</span></div>
+              <div><strong>JTG</strong><span>规范约束</span></div>
+              <div><strong>OAC</strong><span>自动推导</span></div>
+            </div>
+          </div>
+
+          <div className="process-board">
+            <div className="process-flow">
+              {[
+                {
+                  step: '01',
+                  Icon: Settings2,
+                  title: '基本参数设置',
+                  desc: '录入混合料类型、道路等级与密度参数，自动匹配规范指标。',
+                },
+                {
+                  step: '02',
+                  Icon: BarChart3,
+                  title: '矿料级配设计',
+                  desc: '输入筛孔通过率，同步绘制级配曲线并提示越界筛孔。',
+                },
+                {
+                  step: '03',
+                  Icon: FlaskConical,
+                  title: '马歇尔试验录入',
+                  desc: '记录稳定度、流值、VV、VMA、VFA，形成试验组摘要。',
+                },
+                {
+                  step: '04',
+                  Icon: Target,
+                  title: '最佳油石比计算',
+                  desc: '按四分法推导 OAC，输出关键指标曲线和取值依据。',
+                },
+                {
+                  step: '05',
+                  Icon: FileCheck2,
+                  title: '指标验证与报告',
+                  desc: '对照 JTG F40 完成判定，汇总问题并导出设计报告。',
+                },
+              ].map(({ step, Icon, title, desc }) => (
+                <article key={title} className="process-step">
+                  <div className="process-step-top">
+                    <span className="pc-index">{step}</span>
+                    <span className="pc-icon"><Icon aria-hidden="true" /></span>
+                  </div>
+                  <h3 className="pc-title">{title}</h3>
+                  <p className="pc-desc">{desc}</p>
+                </article>
+              ))}
+            </div>
+
+            <aside className="process-ai" aria-label="AI 配合比分析">
+              <div className="process-ai-icon"><Sparkles aria-hidden="true" /></div>
+              <div>
+                <div className="pc-index">AI ASSIST</div>
+                <h3 className="pc-title">AI 配合比分析</h3>
+                <p className="pc-desc">读取当前设计数据，生成专业评语、优化建议和施工注意事项，作为人工复核前的辅助检查。</p>
+              </div>
+              <div className="process-ai-checks">
+                {[
+                  ['数据体检', ClipboardCheck],
+                  ['级配风险', Layers3],
+                  ['报告评语', FileCheck2],
+                ].map(([label, CheckIcon]) => (
+                  <span key={label}>
+                    <CheckIcon aria-hidden="true" />
+                    {label}
+                  </span>
+                ))}
+              </div>
+            </aside>
+          </div>
+        </div>
+      </section>
 
       <section id="features" className="acmix-section"><div className="container"><div className="sec-label">功能特性</div><h2 className="sec-title">每个细节<br />都为工程师设计</h2>
         <div className="features-layout"><div className="features-visual"><span className="feat-tag">GRADING CURVE</span><canvas ref={gradingCanvasRef} /></div><div><h3 className="feature-title">实时级配曲线<br />可视化校验</h3><p className="feature-copy">规范上下限以半透明带形区域展示，设计曲线实时跟随输入变化。超出范围的筛孔节点自动标红，偏差值实时显示。</p><FeatureList items={[['📐','折线图 / 柱状图切换','两种视图方式，清晰呈现每个筛孔通过率'],['⚡','一键填入规范中值','快速完成级配初始方案，再手动调整优化'],['🔍','中值偏差实时计算','量化显示每个筛孔距中值的偏差，便于评判']]} /></div></div>
