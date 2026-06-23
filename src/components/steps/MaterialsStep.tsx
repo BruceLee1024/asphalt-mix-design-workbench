@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, SLabel, Button, InfoBox, Input, Select } from '../ui';
+import { Card, SLabel, Button, FormGroup, InfoBox, Input, Select } from '../ui';
 import { useMixDesign } from '../../store/MixDesignContext';
 import { GRADS } from '../../lib/constants';
 import type { MaterialSource } from '../../types';
@@ -17,6 +17,8 @@ export function MaterialsStep() {
     fillDefaultMaterials,
     fitMaterialsToMidpoint,
     blendDesign,
+    specialtyParams,
+    updateSpecialtyParams,
     setStep,
     markStepDone,
   } = useMixDesign();
@@ -81,6 +83,9 @@ export function MaterialsStep() {
                         <option value="coarse">粗集料</option>
                         <option value="fine">细集料</option>
                         <option value="filler">矿粉</option>
+                        <option value="rap">RAP</option>
+                        <option value="fiber">纤维</option>
+                        <option value="additive">外掺剂</option>
                       </Select>
                     </td>
                     <td className="py-2 px-3 border-b border-border2/60"><Input className="w-[76px] text-center p-1.5" type="number" step="0.1" value={m.proportion} onChange={e => update(m.id, 'proportion', e.target.value)} /></td>
@@ -100,6 +105,41 @@ export function MaterialsStep() {
         </div>
         <InfoBox className={Math.abs(blendDesign.totalProportion - 100) <= 0.2 ? 'border-l-green text-green' : 'border-l-yellow text-yellow'}>
           当前材料比例合计 {blendDesign.totalProportion.toFixed(1)}%。合成级配会按比例归一化计算。
+        </InfoBox>
+      </Card>
+
+      <Card title="RAP / 纤维 / 外掺剂专项参数">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-5">
+          <FormGroup label="启用 RAP">
+            <Select value={specialtyParams.rap.enabled ? 'yes' : 'no'} onChange={e => updateSpecialtyParams({ rap: { enabled: e.target.value === 'yes' } })}>
+              <option value="no">否</option>
+              <option value="yes">是</option>
+            </Select>
+          </FormGroup>
+          <FormGroup label="RAP 掺量 (%)">
+            <Input type="number" step="0.1" value={specialtyParams.rap.content} onChange={e => updateSpecialtyParams({ rap: { content: parseFloat(e.target.value) || 0 } })} />
+          </FormGroup>
+          <FormGroup label="RAP 含水率 (%)" hint="知识库限值：≤ 3%">
+            <Input type="number" step="0.1" value={specialtyParams.rap.moisture} onChange={e => updateSpecialtyParams({ rap: { moisture: parseFloat(e.target.value) || 0 } })} />
+          </FormGroup>
+          <FormGroup label="RAP 最大粒径 (mm)" hint="知识库限值：≤ 26.5mm">
+            <Input type="number" step="0.1" value={specialtyParams.rap.maxParticleSize} onChange={e => updateSpecialtyParams({ rap: { maxParticleSize: parseFloat(e.target.value) || 0 } })} />
+          </FormGroup>
+          <FormGroup label="RAP 假颗粒含量 (%)">
+            <Input type="number" step="0.1" value={specialtyParams.rap.falseParticleContent} onChange={e => updateSpecialtyParams({ rap: { falseParticleContent: parseFloat(e.target.value) || 0 } })} />
+          </FormGroup>
+          <FormGroup label="高模量外掺剂 (%)">
+            <Input type="number" step="0.1" value={specialtyParams.additives.highModulusAdditiveContent} onChange={e => updateSpecialtyParams({ additives: { highModulusAdditiveContent: parseFloat(e.target.value) || 0 } })} />
+          </FormGroup>
+          <FormGroup label="纤维类型">
+            <Input value={specialtyParams.additives.fiberType} onChange={e => updateSpecialtyParams({ additives: { fiberType: e.target.value } })} />
+          </FormGroup>
+          <FormGroup label="抗剥落剂掺量 (%)">
+            <Input type="number" step="0.01" value={specialtyParams.additives.antiStrippingAgentContent} onChange={e => updateSpecialtyParams({ additives: { antiStrippingAgentContent: parseFloat(e.target.value) || 0 } })} />
+          </FormGroup>
+        </div>
+        <InfoBox>
+          RAP、纤维与外掺剂参数会进入专项校核和报告施工建议；未启用时不阻断 AC 常规流程。
         </InfoBox>
       </Card>
 

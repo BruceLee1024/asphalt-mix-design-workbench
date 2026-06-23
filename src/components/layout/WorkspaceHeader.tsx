@@ -6,7 +6,7 @@ import { cn } from '../../lib/utils';
 
 export function WorkspaceHeader() {
   const { oacResult, basicInfo, step, standardProfile, workflowStatus, projectReadiness, reportVersion } = useMixDesign();
-  const totalSteps = 8;
+  const totalSteps = 9;
   const progressPercent = ((step + 1) / totalSteps) * 100;
   const activeFlow = workflowStatus[step];
   const gradationStatus = workflowStatus[2]?.status ?? 'idle';
@@ -46,6 +46,7 @@ export function WorkspaceHeader() {
               {step === 5 && 'Analysis'}
               {step === 6 && 'Verification'}
               {step === 7 && 'Report'}
+              {step === 8 && 'Knowledge'}
             </div>
           </div>
         </div>

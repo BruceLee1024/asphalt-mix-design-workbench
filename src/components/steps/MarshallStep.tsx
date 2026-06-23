@@ -17,11 +17,14 @@ export function MarshallStep() {
     updateMarshallSpecimenCount,
     fillSampleMarshall,
     calcOAC,
+    specialtyParams,
+    updateSpecialtyParams,
     setStep,
     markStepDone,
     oacResult,
     isDenseAc,
     inputAudit,
+    basicInfo,
   } = useMixDesign();
   const missingRows = marshallData.filter(d => !d.oac || !d.den || !d.gt || !d.ms || !d.fl).length;
 
@@ -42,7 +45,7 @@ export function MarshallStep() {
       <SLabel>马歇尔试验参数</SLabel>
       {!isDenseAc && (
         <InfoBox className="border-l-yellow text-yellow">
-          当前混合料类型为专项设计类型，本页仍可录入数据，但 OAC 自动判定按 AC 密级配流程关闭。
+          当前混合料类型为专项设计类型，本页仍可录入马歇尔数据；自动 OAC 判定会按所选设计方法和知识库适用范围执行。
         </InfoBox>
       )}
 
@@ -72,6 +75,8 @@ export function MarshallStep() {
           </FormGroup>
         </div>
       </Card>
+
+      {basicDesignPanel()}
 
       <Card 
         title="5组油石比试验结果（平均值快速录入）"
@@ -211,12 +216,84 @@ export function MarshallStep() {
 
       <div className="flex justify-between mt-6 pb-2">
         <Button variant="ghost" onClick={() => setStep(3)}>← 返回</Button>
-        <Button onClick={handleCalc} disabled={!isDenseAc || missingRows > 0} title={missingRows ? `${missingRows} 组数据未完整录入` : undefined}>
-          <Calculator className="w-4 h-4" /> 计算 OAC1 / OAC2 →
+        <Button onClick={handleCalc} disabled={isCalcDisabled()} title={missingRows ? `${missingRows} 组数据未完整录入` : undefined}>
+          <Calculator className="w-4 h-4" /> {calcButtonLabel()} →
         </Button>
       </div>
     </div>
   );
+
+  function basicDesignPanel() {
+    if (basicInfo.designMethod === 'superpave') {
+      return (
+        <Card title="Superpave / SGC 参数">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-5">
+            <FormGroup label="Nini">
+              <Input type="number" value={specialtyParams.superpave.nini} onChange={e => updateSpecialtyParams({ superpave: { nini: parseFloat(e.target.value) || 0 } })} />
+            </FormGroup>
+            <FormGroup label="Ndes">
+              <Input type="number" value={specialtyParams.superpave.ndes} onChange={e => updateSpecialtyParams({ superpave: { ndes: parseFloat(e.target.value) || 0 } })} />
+            </FormGroup>
+            <FormGroup label="Nmax">
+              <Input type="number" value={specialtyParams.superpave.nmax} onChange={e => updateSpecialtyParams({ superpave: { nmax: parseFloat(e.target.value) || 0 } })} />
+            </FormGroup>
+            <FormGroup label="Ndes 压实度 (%Gmm)" hint="目标约 96%Gmm">
+              <Input type="number" step="0.1" value={specialtyParams.superpave.gmmAtNdes} onChange={e => updateSpecialtyParams({ superpave: { gmmAtNdes: parseFloat(e.target.value) || 0 } })} />
+            </FormGroup>
+            <FormGroup label="Nmax 压实度 (%Gmm)" hint="知识库限值：< 98%Gmm">
+              <Input type="number" step="0.1" value={specialtyParams.superpave.gmmAtNmax} onChange={e => updateSpecialtyParams({ superpave: { gmmAtNmax: parseFloat(e.target.value) || 0 } })} />
+            </FormGroup>
+            <FormGroup label="Ndes 对应沥青含量 (%)">
+              <Input type="number" step="0.1" value={specialtyParams.superpave.asphaltContentAtNdes} onChange={e => updateSpecialtyParams({ superpave: { asphaltContentAtNdes: parseFloat(e.target.value) || 0 } })} />
+            </FormGroup>
+          </div>
+          <InfoBox>固定参数：垂直压力 {specialtyParams.superpave.pressureKpa} kPa，旋转角 {specialtyParams.superpave.angleDeg}°，转速 {specialtyParams.superpave.speedRpm} r/min。</InfoBox>
+        </Card>
+      );
+    }
+    if (basicInfo.mixType === 'SMA-13') {
+      return (
+        <Card title="SMA 体积专项参数">
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-5">
+            <FormGroup label="VMA (%)" hint="知识库限值：≥ 18%">
+              <Input type="number" step="0.1" value={specialtyParams.sma.vma} onChange={e => updateSpecialtyParams({ sma: { vma: parseFloat(e.target.value) || 0 } })} />
+            </FormGroup>
+            <FormGroup label="VCAmix (%)">
+              <Input type="number" step="0.1" value={specialtyParams.sma.vcamix} onChange={e => updateSpecialtyParams({ sma: { vcamix: parseFloat(e.target.value) || 0 } })} />
+            </FormGroup>
+            <FormGroup label="VCADRC (%)">
+              <Input type="number" step="0.1" value={specialtyParams.sma.vcadrc} onChange={e => updateSpecialtyParams({ sma: { vcadrc: parseFloat(e.target.value) || 0 } })} />
+            </FormGroup>
+            <FormGroup label="纤维掺量 (%)">
+              <Input type="number" step="0.01" value={specialtyParams.sma.fiberContent} onChange={e => updateSpecialtyParams({ sma: { fiberContent: parseFloat(e.target.value) || 0 } })} />
+            </FormGroup>
+          </div>
+        </Card>
+      );
+    }
+    if (basicInfo.designMethod === 'patent-oac') {
+      return (
+        <Card title="改性沥青 OAC 直算说明">
+          <InfoBox>
+            直算路径将使用当前道路等级的 VV/VFA 规范上下限代入内置专利公式，生成 OAC 初值。报告会保留“需试验复核”的适用性提示。
+          </InfoBox>
+        </Card>
+      );
+    }
+    return null;
+  }
+
+  function isCalcDisabled() {
+    if (basicInfo.designMethod === 'superpave') return !specialtyParams.superpave.asphaltContentAtNdes || !specialtyParams.superpave.gmmAtNdes || !specialtyParams.superpave.gmmAtNmax;
+    if (basicInfo.designMethod === 'patent-oac') return false;
+    return !isDenseAc || missingRows > 0;
+  }
+
+  function calcButtonLabel() {
+    if (basicInfo.designMethod === 'superpave') return '计算 Superpave OAC';
+    if (basicInfo.designMethod === 'patent-oac') return '直算 OAC';
+    return '计算 OAC1 / OAC2';
+  }
 }
 
 function RawCell({ value, onChange, step }: { value: number; onChange: (value: number) => void; step: string }) {

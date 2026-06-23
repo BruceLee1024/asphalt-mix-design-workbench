@@ -12,14 +12,19 @@ import type {
   OacResult,
   PerformanceTestRecord,
   ProjectLedger,
+  ProjectRecord,
   ProjectReadiness,
   ReportVersion,
   ReviewIssue,
+  MixDesignRecordSummary,
+  SpecialtyCheck,
+  SpecialtyParameterPatch,
+  SpecialtyParameters,
   StandardProfile,
   StepWorkflowStatus,
 } from '../types';
 import { ASPHALT_DENSITIES, DENSE_AC_TYPES, GRADS, SPECS, STANDARD_PROFILES } from '../lib/constants';
-import { calculateBlendGradation, calculateOacAnalysis, calculateTheoreticalMaxDensity, calculateVolumetrics, fitBlendToMidpoint, validateGradation } from '../lib/math';
+import { buildSpecialtyChecks, calculateBlendGradation, calculateOacAnalysis, calculatePatentOac, calculateSuperpaveResult, calculateTheoreticalMaxDensity, calculateVolumetrics, fitBlendToMidpoint, validateGradation } from '../lib/math';
 import { getInputAudit, getWorkflowStatus } from '../lib/workflow';
 import {
   calculateMarshallGroup,
@@ -29,6 +34,7 @@ import {
   createDefaultPerformanceRecords,
   createDefaultProjectLedger,
   createDefaultReportVersion,
+  createDefaultSpecialtyParameters,
   createMarshallGroups,
   getPerformanceConclusion,
   getProjectReadiness,
@@ -36,8 +42,11 @@ import {
   hashDesignState,
   makeReportCode,
 } from '../lib/lab';
+import { getApplicableKnowledge, getConstructionGuidance, KNOWLEDGE_VERSION } from '../lib/knowledge';
+import type { ConstructionKnowledgeRecord, KnowledgeRecord } from '../lib/knowledge/types';
 
 const STORAGE_KEY = 'ac_mix_design_v2';
+const PORTFOLIO_VERSION = 1;
 
 interface MixDesignState {
   step: number;
@@ -51,7 +60,25 @@ interface MixDesignState {
   marshallGroups: MarshallGroup[];
   oacResult: OacResult | null;
   performanceRecords: PerformanceTestRecord[];
+  specialtyParams: SpecialtyParameters;
   reportVersion: ReportVersion;
+}
+
+interface MixDesignRecord {
+  id: string;
+  projectId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  state: MixDesignState;
+}
+
+interface MixDesignPortfolio {
+  version: number;
+  activeProjectId: string;
+  activeDesignId: string;
+  projects: ProjectRecord[];
+  designs: MixDesignRecord[];
 }
 
 interface MixDesignContextType extends MixDesignState {
@@ -60,6 +87,17 @@ interface MixDesignContextType extends MixDesignState {
   resetProject: () => void;
   exportJson: () => string;
   importJson: (json: string) => void;
+  portfolio: MixDesignPortfolio;
+  activeProject: ProjectRecord;
+  activeDesign: MixDesignRecordSummary;
+  projectDesigns: MixDesignRecordSummary[];
+  createProject: () => void;
+  duplicateActiveDesign: () => void;
+  createDesignForActiveProject: () => void;
+  switchProject: (id: string) => void;
+  switchDesign: (id: string) => void;
+  deleteProject: (id: string) => void;
+  deleteDesign: (id: string) => void;
   projectLedger: ProjectLedger;
   updateProjectLedger: (updates: Partial<ProjectLedger>) => void;
   asphaltQuality: AsphaltQualityRecord;
@@ -104,6 +142,12 @@ interface MixDesignContextType extends MixDesignState {
   oacResult: OacResult | null;
   performanceRecords: PerformanceTestRecord[];
   updatePerformanceRecord: (id: string, updates: Partial<PerformanceTestRecord>) => void;
+  specialtyParams: SpecialtyParameters;
+  updateSpecialtyParams: (updates: SpecialtyParameterPatch) => void;
+  specialtyChecks: SpecialtyCheck[];
+  constructionGuidance: ConstructionKnowledgeRecord[];
+  applicableKnowledge: KnowledgeRecord[];
+  knowledgeVersion: string;
   performanceConclusion: '待补充' | '需复核' | '已通过';
   reviewIssues: ReviewIssue[];
   projectReadiness: ProjectReadiness;
@@ -119,6 +163,11 @@ const defaultBasicInfo: BasicInfo = {
   roadGrade: 'hw',
   layerPos: 'top',
   standardProfileId: 'jtg-f40-2004-jtg3410-2025',
+  projectDomain: 'road',
+  designMethod: 'marshall',
+  trafficLevel: 'heavy',
+  esals: 12000000,
+  materialSystem: 'modified',
   climate: '1区（夏炎热冬严寒）',
   projName: 'XX高速公路路面工程',
   projUnit: 'XX工程检测有限公司',
@@ -158,7 +207,8 @@ function createDefaultState(): MixDesignState {
     marshallData: createMarshallRows(4.5),
     marshallGroups: createMarshallGroups(4.5),
     oacResult: null,
-    performanceRecords: createDefaultPerformanceRecords(),
+    performanceRecords: createDefaultPerformanceRecords(defaultBasicInfo),
+    specialtyParams: createDefaultSpecialtyParameters(),
     reportVersion: createDefaultReportVersion(),
   };
 }
@@ -177,12 +227,18 @@ function createMarshallRows(baseOac: number): MarshallSpecimen[] {
 }
 
 export function MixDesignProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<MixDesignState>(() => loadState());
+  const initialWorkspace = useMemo(() => loadWorkspace(), []);
+  const [portfolio, setPortfolio] = useState<MixDesignPortfolio>(initialWorkspace.portfolio);
+  const [state, setState] = useState<MixDesignState>(initialWorkspace.state);
   const [tmrdResult, setTmrdResult] = useState<number | null>(null);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    setPortfolio(prev => syncActiveDesign(prev, state));
   }, [state]);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(portfolio));
+  }, [portfolio]);
 
   const standardProfile = STANDARD_PROFILES[state.basicInfo.standardProfileId];
   const isDenseAc = DENSE_AC_TYPES.includes(state.basicInfo.mixType as any);
@@ -202,8 +258,11 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
   }), [blendDesign, gradingWarnings, state.basicInfo, state.marshallData, state.oacResult, state.projectLedger]);
   const inputAudit = useMemo(() => getInputAudit(auditInput), [auditInput]);
   const workflowStatus = useMemo(() => getWorkflowStatus(auditInput), [auditInput]);
-  const performanceRecords = useMemo(() => calculatePerformanceChecks(state.performanceRecords), [state.performanceRecords]);
+  const performanceRecords = useMemo(() => calculatePerformanceChecks(state.performanceRecords, state.basicInfo), [state.performanceRecords, state.basicInfo]);
   const performanceConclusion = useMemo(() => getPerformanceConclusion(performanceRecords), [performanceRecords]);
+  const specialtyChecks = useMemo(() => buildSpecialtyChecks(state.basicInfo, state.specialtyParams), [state.basicInfo, state.specialtyParams]);
+  const constructionGuidance = useMemo(() => getConstructionGuidance(state.basicInfo), [state.basicInfo]);
+  const applicableKnowledge = useMemo(() => getApplicableKnowledge(state.basicInfo), [state.basicInfo]);
   const labInput = useMemo(() => ({
     basicInfo: state.basicInfo,
     projectLedger: state.projectLedger,
@@ -216,7 +275,9 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
     oacResult: state.oacResult,
     performanceRecords,
     reportVersion: state.reportVersion,
-  }), [blendDesign, gradingWarnings, performanceRecords, state.asphaltQuality, state.basicInfo, state.marshallData, state.marshallGroups, state.materials, state.oacResult, state.projectLedger, state.reportVersion]);
+    specialtyParams: state.specialtyParams,
+    specialtyChecks,
+  }), [blendDesign, gradingWarnings, performanceRecords, specialtyChecks, state.asphaltQuality, state.basicInfo, state.marshallData, state.marshallGroups, state.materials, state.oacResult, state.projectLedger, state.reportVersion, state.specialtyParams]);
   const reviewIssues = useMemo(() => getReviewIssues(labInput), [labInput]);
   const projectReadiness = useMemo(() => getProjectReadiness(labInput), [labInput]);
   const designDataHash = useMemo(() => hashDesignState({
@@ -229,7 +290,15 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
     marshallGroups: state.marshallGroups,
     oacResult: state.oacResult,
     performanceRecords,
+    specialtyParams: state.specialtyParams,
+    specialtyChecks,
+    constructionGuidance,
+    knowledgeVersion: KNOWLEDGE_VERSION,
   }), [blendDesign, performanceRecords, state.asphaltQuality, state.basicInfo, state.marshallData, state.marshallGroups, state.materials, state.oacResult, state.projectLedger]);
+  const activeProject = portfolio.projects.find(project => project.id === portfolio.activeProjectId) ?? portfolio.projects[0];
+  const activeDesignRecord = portfolio.designs.find(design => design.id === portfolio.activeDesignId) ?? portfolio.designs[0];
+  const activeDesign = toDesignSummary(activeDesignRecord);
+  const projectDesigns = portfolio.designs.filter(design => design.projectId === activeProject.id).map(toDesignSummary);
 
   const setStep = (step: number) => setState(prev => ({ ...prev, step }));
   const markStepDone = (s: number) => setState(prev => {
@@ -239,15 +308,90 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
   });
 
   const resetProject = () => {
-    localStorage.removeItem(STORAGE_KEY);
+    const next = createPortfolioFromState(createDefaultState());
     setTmrdResult(null);
-    setState(createDefaultState());
+    setPortfolio(next);
+    setState(next.designs[0].state);
   };
 
-  const exportJson = () => JSON.stringify(state, null, 2);
+  const exportJson = () => JSON.stringify(syncActiveDesign(portfolio, state), null, 2);
   const importJson = (json: string) => {
-    const parsed = JSON.parse(json) as Partial<MixDesignState>;
-    setState(normalizeState({ ...createDefaultState(), ...parsed, step: 0, stepDone: [false, false, false, false, false, false, false, false] }));
+    const parsed = JSON.parse(json) as Partial<MixDesignState> | MixDesignPortfolio;
+    const workspace = loadWorkspaceFromParsed(parsed);
+    setPortfolio(workspace.portfolio);
+    setState(workspace.state);
+  };
+
+  const createProject = () => {
+    const nextState = createDefaultState();
+    const now = new Date().toISOString();
+    const index = portfolio.projects.length + 1;
+    nextState.basicInfo = { ...nextState.basicInfo, projName: `新建工程 ${index}` };
+    nextState.projectLedger = { ...nextState.projectLedger, projectCode: `PRJ-AC-${new Date().getFullYear()}-${String(index).padStart(3, '0')}`, sampleCode: 'YP-AC-001' };
+    const project = projectFromState(nextState, now);
+    const design = designFromState(project.id, nextState, now);
+    setPortfolio(prev => ({ ...prev, activeProjectId: project.id, activeDesignId: design.id, projects: [...prev.projects, project], designs: [...prev.designs, design] }));
+    setState(nextState);
+    setTmrdResult(null);
+  };
+
+  const createDesignForActiveProject = () => {
+    const now = new Date().toISOString();
+    const nextState = normalizeState({
+      ...createDefaultState(),
+      basicInfo: { ...createDefaultState().basicInfo, projName: activeProject.name, projUnit: state.basicInfo.projUnit },
+      projectLedger: { ...createDefaultProjectLedger(), projectCode: activeProject.projectCode, clientUnit: activeProject.clientUnit, sampleCode: `YP-AC-${String(projectDesigns.length + 1).padStart(3, '0')}` },
+    });
+    const design = designFromState(activeProject.id, nextState, now, `配合比设计 ${projectDesigns.length + 1}`);
+    setPortfolio(prev => ({ ...prev, activeDesignId: design.id, designs: [...prev.designs, design] }));
+    setState(nextState);
+    setTmrdResult(null);
+  };
+
+  const duplicateActiveDesign = () => {
+    const now = new Date().toISOString();
+    const nextState = normalizeState({ ...state, reportVersion: createDefaultReportVersion(), projectLedger: { ...state.projectLedger, reportCode: '', sampleCode: `${state.projectLedger.sampleCode || 'YP'}-COPY` } });
+    const design = designFromState(activeProject.id, nextState, now, `${activeDesign.name} 副本`);
+    setPortfolio(prev => ({ ...prev, activeDesignId: design.id, designs: [...prev.designs, design] }));
+    setState(nextState);
+    setTmrdResult(null);
+  };
+
+  const switchProject = (id: string) => {
+    const design = portfolio.designs.find(item => item.projectId === id) ?? portfolio.designs[0];
+    if (!design) return;
+    setPortfolio(prev => ({ ...syncActiveDesign(prev, state), activeProjectId: id, activeDesignId: design.id }));
+    setState(normalizeState(design.state));
+    setTmrdResult(null);
+  };
+
+  const switchDesign = (id: string) => {
+    const design = portfolio.designs.find(item => item.id === id);
+    if (!design) return;
+    setPortfolio(prev => ({ ...syncActiveDesign(prev, state), activeProjectId: design.projectId, activeDesignId: design.id }));
+    setState(normalizeState(design.state));
+    setTmrdResult(null);
+  };
+
+  const deleteProject = (id: string) => {
+    if (portfolio.projects.length <= 1) return;
+    const nextProjects = portfolio.projects.filter(project => project.id !== id);
+    const nextDesigns = portfolio.designs.filter(design => design.projectId !== id);
+    const fallbackProject = nextProjects[0];
+    const fallbackDesign = nextDesigns.find(design => design.projectId === fallbackProject.id) ?? nextDesigns[0];
+    setPortfolio(prev => ({ ...prev, projects: nextProjects, designs: nextDesigns, activeProjectId: fallbackProject.id, activeDesignId: fallbackDesign.id }));
+    setState(normalizeState(fallbackDesign.state));
+    setTmrdResult(null);
+  };
+
+  const deleteDesign = (id: string) => {
+    const designsInProject = portfolio.designs.filter(design => design.projectId === activeProject.id);
+    if (designsInProject.length <= 1) return;
+    const nextDesigns = portfolio.designs.filter(design => design.id !== id);
+    const fallbackDesign = nextDesigns.find(design => design.projectId === activeProject.id) ?? nextDesigns[0];
+    setPortfolio(prev => ({ ...prev, designs: nextDesigns, activeProjectId: fallbackDesign.projectId, activeDesignId: fallbackDesign.id }));
+    setState(normalizeState(fallbackDesign.state));
+    setTmrdResult(null);
   };
 
   const updateProjectLedger = (updates: Partial<ProjectLedger>) => {
@@ -264,6 +408,10 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
       if (updates.asphaltGrade && ASPHALT_DENSITIES[updates.asphaltGrade]) {
         basicInfo.denB = ASPHALT_DENSITIES[updates.asphaltGrade];
       }
+      if (updates.mixType) {
+        basicInfo.materialSystem = inferMaterialSystem(updates.mixType, basicInfo.materialSystem);
+        basicInfo.designMethod = inferDesignMethod(updates.mixType, basicInfo.designMethod);
+      }
       let materials = prev.materials;
       let marshallData = prev.marshallData;
       let marshallGroups = prev.marshallGroups;
@@ -272,7 +420,8 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
         marshallData = createMarshallRows(prev.oacInit);
         marshallGroups = createMarshallGroups(prev.oacInit);
       }
-      return draftState({ ...prev, basicInfo, materials, marshallData, marshallGroups, oacResult: null });
+      const resetPerformance = Boolean(updates.mixType || updates.designMethod || updates.materialSystem || updates.projectDomain);
+      return draftState({ ...prev, basicInfo, materials, marshallData, marshallGroups, performanceRecords: resetPerformance ? createDefaultPerformanceRecords(basicInfo) : prev.performanceRecords, oacResult: null });
     });
   };
 
@@ -428,10 +577,18 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
   };
 
   const calcOAC = () => {
-    const result = calculateOacAnalysis(state.marshallData, SPECS[state.basicInfo.roadGrade]);
+    let result: OacResult | null = null;
+    if (state.basicInfo.designMethod === 'patent-oac') {
+      const spec = SPECS[state.basicInfo.roadGrade];
+      result = calculatePatentOac(spec.vv.lo, spec.vfa.lo, spec.vv.hi ?? spec.vv.lo, spec.vfa.hi ?? spec.vfa.lo);
+    } else if (state.basicInfo.designMethod === 'superpave') {
+      result = calculateSuperpaveResult(state.specialtyParams.superpave);
+    } else {
+      result = calculateOacAnalysis(state.marshallData, SPECS[state.basicInfo.roadGrade]);
+    }
     if (!result || result.oac2 === null) {
       setState(prev => draftState({ ...prev, oacResult: result }));
-      return false;
+      return state.basicInfo.designMethod !== 'marshall' && Boolean(result);
     }
     setState(prev => draftState({ ...prev, oacResult: result }));
     return true;
@@ -439,6 +596,21 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
 
   const updatePerformanceRecord = (id: string, updates: Partial<PerformanceTestRecord>) => {
     setState(prev => draftState({ ...prev, performanceRecords: prev.performanceRecords.map(record => record.id === id ? { ...record, ...updates } : record) }));
+  };
+
+  const updateSpecialtyParams = (updates: SpecialtyParameterPatch) => {
+    setState(prev => draftState({
+      ...prev,
+      specialtyParams: {
+        ...prev.specialtyParams,
+        ...updates,
+        rap: { ...prev.specialtyParams.rap, ...updates.rap },
+        superpave: { ...prev.specialtyParams.superpave, ...updates.superpave },
+        sma: { ...prev.specialtyParams.sma, ...updates.sma },
+        additives: { ...prev.specialtyParams.additives, ...updates.additives },
+      },
+      oacResult: updates.superpave ? null : prev.oacResult,
+    }));
   };
 
   const freezeReport = () => {
@@ -463,6 +635,17 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
     resetProject,
     exportJson,
     importJson,
+    portfolio,
+    activeProject,
+    activeDesign,
+    projectDesigns,
+    createProject,
+    duplicateActiveDesign,
+    createDesignForActiveProject,
+    switchProject,
+    switchDesign,
+    deleteProject,
+    deleteDesign,
     projectLedger: state.projectLedger,
     updateProjectLedger,
     asphaltQuality: state.asphaltQuality,
@@ -497,6 +680,12 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
     calcOAC,
     performanceRecords,
     updatePerformanceRecord,
+    specialtyParams: state.specialtyParams,
+    updateSpecialtyParams,
+    specialtyChecks,
+    constructionGuidance,
+    applicableKnowledge,
+    knowledgeVersion: KNOWLEDGE_VERSION,
     performanceConclusion,
     reviewIssues,
     projectReadiness,
@@ -508,28 +697,58 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
   return <MixDesignContext.Provider value={value}>{children}</MixDesignContext.Provider>;
 }
 
-function loadState(): MixDesignState {
+function loadWorkspace(): { portfolio: MixDesignPortfolio; state: MixDesignState } {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return createDefaultState();
-    const parsed = JSON.parse(raw) as Partial<MixDesignState>;
-    const fallback = createDefaultState();
-    return normalizeState({
-      ...fallback,
-      ...parsed,
-      basicInfo: { ...fallback.basicInfo, ...parsed.basicInfo },
-      projectLedger: { ...fallback.projectLedger, ...parsed.projectLedger },
-      asphaltQuality: { ...fallback.asphaltQuality, ...parsed.asphaltQuality },
-      materials: parsed.materials?.length ? parsed.materials : fallback.materials,
-      marshallData: parsed.marshallData?.length ? parsed.marshallData : fallback.marshallData,
-      marshallGroups: parsed.marshallGroups?.length ? parsed.marshallGroups : fallback.marshallGroups,
-      performanceRecords: parsed.performanceRecords?.length ? parsed.performanceRecords : fallback.performanceRecords,
-      reportVersion: { ...fallback.reportVersion, ...parsed.reportVersion },
-      stepDone: parsed.stepDone?.length === 8 ? parsed.stepDone : fallback.stepDone,
-    });
+    if (!raw) {
+      const portfolio = createPortfolioFromState(createDefaultState());
+      return { portfolio, state: portfolio.designs[0].state };
+    }
+    return loadWorkspaceFromParsed(JSON.parse(raw) as Partial<MixDesignState> | MixDesignPortfolio);
   } catch {
-    return createDefaultState();
+    const portfolio = createPortfolioFromState(createDefaultState());
+    return { portfolio, state: portfolio.designs[0].state };
   }
+}
+
+function loadWorkspaceFromParsed(parsed: Partial<MixDesignState> | MixDesignPortfolio): { portfolio: MixDesignPortfolio; state: MixDesignState } {
+  if (isPortfolio(parsed)) {
+    const fallback = createPortfolioFromState(createDefaultState());
+    const designs = parsed.designs.length ? parsed.designs.map(design => ({ ...design, state: normalizeImportedState(design.state) })) : fallback.designs;
+    const projects = parsed.projects.length ? parsed.projects : fallback.projects;
+    const activeDesign = designs.find(design => design.id === parsed.activeDesignId) ?? designs[0];
+    const activeProject = projects.find(project => project.id === (parsed.activeProjectId || activeDesign.projectId)) ?? projects[0];
+    const portfolio: MixDesignPortfolio = {
+      version: PORTFOLIO_VERSION,
+      activeProjectId: activeProject.id,
+      activeDesignId: activeDesign.id,
+      projects,
+      designs,
+    };
+    return { portfolio, state: normalizeState(activeDesign.state) };
+  }
+
+  const state = normalizeImportedState(parsed);
+  const portfolio = createPortfolioFromState(state);
+  return { portfolio, state };
+}
+
+function normalizeImportedState(parsed: Partial<MixDesignState>): MixDesignState {
+  const fallback = createDefaultState();
+  return normalizeState({
+    ...fallback,
+    ...parsed,
+    basicInfo: { ...fallback.basicInfo, ...parsed.basicInfo },
+    projectLedger: { ...fallback.projectLedger, ...parsed.projectLedger },
+    asphaltQuality: { ...fallback.asphaltQuality, ...parsed.asphaltQuality },
+    materials: parsed.materials?.length ? parsed.materials : fallback.materials,
+    marshallData: parsed.marshallData?.length ? parsed.marshallData : fallback.marshallData,
+    marshallGroups: parsed.marshallGroups?.length ? parsed.marshallGroups : fallback.marshallGroups,
+    performanceRecords: parsed.performanceRecords?.length ? parsed.performanceRecords : fallback.performanceRecords,
+    specialtyParams: { ...fallback.specialtyParams, ...parsed.specialtyParams },
+    reportVersion: { ...fallback.reportVersion, ...parsed.reportVersion },
+    stepDone: parsed.stepDone?.length === 8 ? parsed.stepDone : fallback.stepDone,
+  });
 }
 
 function normalizeState(state: MixDesignState): MixDesignState {
@@ -539,7 +758,8 @@ function normalizeState(state: MixDesignState): MixDesignState {
     asphaltQuality: { ...createDefaultAsphaltQuality(), ...state.asphaltQuality },
     materials: state.materials.map(m => ({ ...m, quality: { ...createDefaultMaterialQuality(m.type), ...m.quality } })),
     marshallGroups: state.marshallGroups.length ? state.marshallGroups : createMarshallGroups(state.oacInit),
-    performanceRecords: state.performanceRecords.length ? state.performanceRecords : createDefaultPerformanceRecords(),
+    performanceRecords: state.performanceRecords.length ? state.performanceRecords : createDefaultPerformanceRecords(state.basicInfo),
+    specialtyParams: mergeSpecialtyParams(state.specialtyParams),
     reportVersion: { ...createDefaultReportVersion(), ...state.reportVersion },
   };
 }
@@ -558,6 +778,103 @@ function nextReportVersion(version: string) {
 
 function round3(value: number) {
   return Math.round(value * 1000) / 1000;
+}
+
+function inferMaterialSystem(mixType: BasicInfo['mixType'], fallback: BasicInfo['materialSystem']): BasicInfo['materialSystem'] {
+  if (mixType === 'SMA-13') return 'sma';
+  if (mixType === 'HM-20') return 'high-modulus';
+  if (mixType === 'RAP-AC-20') return 'rap';
+  if (mixType === 'CMA-13') return 'cold-mix';
+  if (mixType === 'OGFC-13') return 'modified';
+  return fallback === 'sma' || fallback === 'high-modulus' || fallback === 'rap' || fallback === 'cold-mix' ? 'modified' : fallback;
+}
+
+function inferDesignMethod(mixType: BasicInfo['mixType'], fallback: BasicInfo['designMethod']): BasicInfo['designMethod'] {
+  if (mixType === 'SMA-13' || mixType === 'OGFC-13' || mixType === 'RAP-AC-20' || mixType === 'CMA-13') return 'marshall';
+  return fallback;
+}
+
+function mergeSpecialtyParams(params: Partial<SpecialtyParameters> | undefined): SpecialtyParameters {
+  const fallback = createDefaultSpecialtyParameters();
+  return {
+    rap: { ...fallback.rap, ...params?.rap },
+    superpave: { ...fallback.superpave, ...params?.superpave },
+    sma: { ...fallback.sma, ...params?.sma },
+    additives: { ...fallback.additives, ...params?.additives },
+  };
+}
+
+function createPortfolioFromState(state: MixDesignState): MixDesignPortfolio {
+  const now = new Date().toISOString();
+  const normalized = normalizeState(state);
+  const project = projectFromState(normalized, now);
+  const design = designFromState(project.id, normalized, now);
+  return {
+    version: PORTFOLIO_VERSION,
+    activeProjectId: project.id,
+    activeDesignId: design.id,
+    projects: [project],
+    designs: [design],
+  };
+}
+
+function projectFromState(state: MixDesignState, now: string): ProjectRecord {
+  return {
+    id: makeId('project'),
+    projectCode: state.projectLedger.projectCode || `PRJ-${now.slice(0, 10).replace(/-/g, '')}`,
+    name: state.basicInfo.projName || '未命名工程',
+    clientUnit: state.projectLedger.clientUnit || '',
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function designFromState(projectId: string, state: MixDesignState, now: string, name?: string): MixDesignRecord {
+  return {
+    id: makeId('design'),
+    projectId,
+    name: name || `${state.basicInfo.mixType} · ${state.projectLedger.sampleCode || '未命名样品'}`,
+    createdAt: now,
+    updatedAt: now,
+    state: normalizeState({ ...state, step: 0 }),
+  };
+}
+
+function syncActiveDesign(portfolio: MixDesignPortfolio, state: MixDesignState): MixDesignPortfolio {
+  const now = new Date().toISOString();
+  const activeDesign = portfolio.designs.find(design => design.id === portfolio.activeDesignId);
+  if (!activeDesign) return portfolio;
+  return {
+    ...portfolio,
+    projects: portfolio.projects.map(project => project.id === portfolio.activeProjectId
+      ? { ...project, projectCode: state.projectLedger.projectCode || project.projectCode, name: state.basicInfo.projName || project.name, clientUnit: state.projectLedger.clientUnit || project.clientUnit, updatedAt: now }
+      : project),
+    designs: portfolio.designs.map(design => design.id === portfolio.activeDesignId
+      ? { ...design, name: `${state.basicInfo.mixType} · ${state.projectLedger.sampleCode || '未命名样品'}`, updatedAt: now, state }
+      : design),
+  };
+}
+
+function toDesignSummary(design: MixDesignRecord): MixDesignRecordSummary {
+  return {
+    id: design.id,
+    projectId: design.projectId,
+    name: design.name,
+    mixType: design.state.basicInfo.mixType,
+    sampleCode: design.state.projectLedger.sampleCode,
+    testDate: design.state.projectLedger.testDate,
+    reportCode: design.state.projectLedger.reportCode,
+    reportStatus: design.state.reportVersion.status,
+    updatedAt: design.updatedAt,
+  };
+}
+
+function isPortfolio(value: Partial<MixDesignState> | MixDesignPortfolio): value is MixDesignPortfolio {
+  return Array.isArray((value as MixDesignPortfolio).projects) && Array.isArray((value as MixDesignPortfolio).designs);
+}
+
+function makeId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function useMixDesign() {

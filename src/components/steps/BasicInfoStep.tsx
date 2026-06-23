@@ -2,10 +2,10 @@ import React from 'react';
 import { Card, SLabel, FormGroup, Input, Select, Button, InfoBox } from '../ui';
 import { useMixDesign } from '../../store/MixDesignContext';
 import { STANDARD_PROFILES } from '../../lib/constants';
-import type { StandardProfileId } from '../../types';
+import type { DesignMethod, MaterialSystem, ProjectDomain, StandardProfileId, TrafficLevel } from '../../types';
 
 export function BasicInfoStep() {
-  const { basicInfo, updateBasicInfo, asphaltQuality, updateAsphaltQuality, markStepDone, setStep, isDenseAc, standardProfile } = useMixDesign();
+  const { basicInfo, updateBasicInfo, asphaltQuality, updateAsphaltQuality, markStepDone, setStep, isDenseAc, standardProfile, knowledgeVersion, applicableKnowledge } = useMixDesign();
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -24,6 +24,32 @@ export function BasicInfoStep() {
               <option value="AC-25">AC-25（粗粒式）</option>
               <option value="SMA-13">SMA-13（骨架密实）</option>
               <option value="OGFC-13">OGFC-13（开级配排水）</option>
+              <option value="HM-20">HM-20（高模量）</option>
+              <option value="RAP-AC-20">RAP-AC-20（厂拌热再生）</option>
+              <option value="CMA-13">CMA-13（冷拌冷铺）</option>
+            </Select>
+          </FormGroup>
+          <FormGroup label="工程类型">
+            <Select value={basicInfo.projectDomain} onChange={e => updateBasicInfo({ projectDomain: e.target.value as ProjectDomain })}>
+              <option value="road">公路工程</option>
+              <option value="airport">机场道面</option>
+            </Select>
+          </FormGroup>
+          <FormGroup label="设计方法">
+            <Select value={basicInfo.designMethod} onChange={e => updateBasicInfo({ designMethod: e.target.value as DesignMethod })}>
+              <option value="marshall">马歇尔法</option>
+              <option value="patent-oac">改性沥青 OAC 直算</option>
+              <option value="superpave">Superpave / SGC</option>
+            </Select>
+          </FormGroup>
+          <FormGroup label="材料体系">
+            <Select value={basicInfo.materialSystem} onChange={e => updateBasicInfo({ materialSystem: e.target.value as MaterialSystem })}>
+              <option value="base">基质沥青</option>
+              <option value="modified">聚合物改性</option>
+              <option value="sma">SMA / 纤维稳定</option>
+              <option value="high-modulus">高模量</option>
+              <option value="rap">厂拌热再生</option>
+              <option value="cold-mix">冷拌冷铺</option>
             </Select>
           </FormGroup>
           <FormGroup label="规范版本">
@@ -42,6 +68,17 @@ export function BasicInfoStep() {
               <option value="2nd">二级公路</option>
               <option value="3rd">三级及以下公路</option>
             </Select>
+          </FormGroup>
+          <FormGroup label="交通等级">
+            <Select value={basicInfo.trafficLevel} onChange={e => updateBasicInfo({ trafficLevel: e.target.value as TrafficLevel })}>
+              <option value="light">轻交通</option>
+              <option value="medium">中交通</option>
+              <option value="heavy">重交通</option>
+              <option value="very-heavy">特重交通</option>
+            </Select>
+          </FormGroup>
+          <FormGroup label="设计 ESALs" hint="当有具体当量轴载数据时填写">
+            <Input type="number" step="10000" value={basicInfo.esals} onChange={e => updateBasicInfo({ esals: parseFloat(e.target.value) || 0 })} />
           </FormGroup>
           <FormGroup label="面层位置">
             <Select value={basicInfo.layerPos} onChange={e => updateBasicInfo({ layerPos: e.target.value as any })}>
@@ -67,11 +104,21 @@ export function BasicInfoStep() {
         </div>
         {!isDenseAc && (
           <InfoBox className="border-l-yellow text-yellow">
-            SMA/OGFC 已保留为专项类型入口，本轮通用 OAC 自动判定仅适用于 AC 密级配混合料。
+            当前混合料为专项设计类型，系统会关闭 AC 通用 OAC 自动判定，并启用对应知识库校核项。
+          </InfoBox>
+        )}
+        {basicInfo.designMethod === 'patent-oac' && (
+          <InfoBox className="border-l-yellow text-yellow">
+            OAC 直算公式仅作为改性沥青目标配合比提效路径，报告会保留适用性提示；必要时仍需用试验曲线复核。
+          </InfoBox>
+        )}
+        {basicInfo.designMethod === 'superpave' && (
+          <InfoBox className="border-l-yellow text-yellow">
+            Superpave 内置 SGC 参数：600 kPa、1.16°、30 r/min；需补录 Ndes 与 Nmax 压实度数据。
           </InfoBox>
         )}
         <InfoBox>
-          当前采用 {standardProfile.designSpec} 与 {standardProfile.testSpec}。历史项目可切换到 JTG E20-2011。
+          当前采用 {standardProfile.designSpec} 与 {standardProfile.testSpec}。知识库版本：{knowledgeVersion}，当前条件匹配 {applicableKnowledge.length} 条依据。
         </InfoBox>
       </Card>
 
@@ -84,6 +131,8 @@ export function BasicInfoStep() {
               <option value="110A">110号 A级道路石油沥青</option>
               <option value="SBS-ID">SBS改性沥青 I-D</option>
               <option value="SBS-IC">SBS改性沥青 I-C</option>
+              <option value="SBR">SBR 改性沥青</option>
+              <option value="HM">高模量专用沥青</option>
             </Select>
           </FormGroup>
           <FormGroup label="沥青密度 ρb (g/cm³)" hint="实测值，70号参考值 1.020~1.040">

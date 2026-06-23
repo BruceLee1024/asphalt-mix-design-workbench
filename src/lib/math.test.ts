@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { calculateBlendGradation, calculateOacAnalysis, calculateVolumetrics, validateGradation } from './math';
+import { buildSpecialtyChecks, calculateBlendGradation, calculateOacAnalysis, calculatePatentOac, calculateSuperpaveResult, calculateVolumetrics, validateGradation } from './math';
 import { GRADS, SPECS } from './constants';
+import { getConstructionGuidance, getGradationSpec, getPerformanceRequirements } from './knowledge';
 import { getWorkflowStatus } from './workflow';
 import {
   calculateMarshallGroup,
@@ -10,6 +11,7 @@ import {
   createDefaultPerformanceRecords,
   createDefaultProjectLedger,
   createDefaultReportVersion,
+  createDefaultSpecialtyParameters,
   createMarshallGroup,
   getPerformanceConclusion,
   getProjectReadiness,
@@ -74,6 +76,11 @@ const basicInfo: BasicInfo = {
   roadGrade: 'hw',
   layerPos: 'top',
   standardProfileId: 'jtg-f40-2004-jtg3410-2025',
+  projectDomain: 'road',
+  designMethod: 'marshall',
+  trafficLevel: 'heavy',
+  esals: 12000000,
+  materialSystem: 'modified',
   climate: '1区',
   projName: '测试项目',
   projUnit: '测试单位',
@@ -170,14 +177,43 @@ test('calculateMarshallGroup flags incomplete and abnormal specimen records', ()
 });
 
 test('calculatePerformanceChecks returns pending, failed and passed conclusions', () => {
-  const pending = calculatePerformanceChecks(createDefaultPerformanceRecords());
+  const pending = calculatePerformanceChecks(createDefaultPerformanceRecords(basicInfo), basicInfo);
   assert.equal(getPerformanceConclusion(pending), '待补充');
 
-  const failed: PerformanceTestRecord[] = pending.map(record => ({ ...record, value: record.key === 'permeability' ? 180 : 100, ok: null }));
-  assert.equal(getPerformanceConclusion(calculatePerformanceChecks(failed)), '需复核');
+  const failed: PerformanceTestRecord[] = pending.map(record => ({ ...record, value: record.key === 'rutting' ? 1000 : 100, ok: null }));
+  assert.equal(getPerformanceConclusion(calculatePerformanceChecks(failed, basicInfo)), '需复核');
 
-  const passed: PerformanceTestRecord[] = pending.map(record => ({ ...record, value: record.key === 'permeability' ? 80 : record.key === 'rutting' ? 1300 : record.key === 'lowTemperature' ? 2400 : 86, ok: null }));
-  assert.equal(getPerformanceConclusion(calculatePerformanceChecks(passed)), '已通过');
+  const passed: PerformanceTestRecord[] = pending.map(record => ({ ...record, value: record.key === 'rutting' ? 4000 : record.key === 'lowTemperature' ? 2400 : 90, ok: null }));
+  assert.equal(getPerformanceConclusion(calculatePerformanceChecks(passed, basicInfo)), '已通过');
+});
+
+test('knowledge base returns gradation, performance and construction rules by design context', () => {
+  assert.equal(getGradationSpec('HM-20').id, 'gradation-hm-20');
+  const highModulusInfo = { ...basicInfo, mixType: 'HM-20' as const, materialSystem: 'high-modulus' as const };
+  assert.ok(getPerformanceRequirements(highModulusInfo).some(rule => rule.id === 'perf-rutting-high-modulus'));
+  assert.ok(getConstructionGuidance(highModulusInfo).some(rule => rule.id === 'const-high-modulus-discharge-temp'));
+});
+
+test('calculatePatentOac and Superpave result return OAC with warnings for risk conditions', () => {
+  const patent = calculatePatentOac(3, 65, 5, 75);
+  assert.ok(patent);
+  assert.equal(patent.method, 'patent-oac');
+  assert.ok(patent.oac > 0);
+
+  const superpave = calculateSuperpaveResult({ nini: 8, ndes: 100, nmax: 160, pressureKpa: 600, angleDeg: 1.16, speedRpm: 30, gmmAtNdes: 95.2, gmmAtNmax: 98.4, asphaltContentAtNdes: 4.7 });
+  assert.ok(superpave);
+  assert.equal(superpave.method, 'superpave');
+  assert.ok(superpave.warnings.some(w => w.includes('Nmax')));
+});
+
+test('buildSpecialtyChecks flags SMA and RAP boundary conditions', () => {
+  const params = createDefaultSpecialtyParameters();
+  params.sma = { ...params.sma, vma: 17.5, vcamix: 42, vcadrc: 40 };
+  params.rap = { ...params.rap, enabled: true, moisture: 3.5, maxParticleSize: 31.5 };
+  const checks = buildSpecialtyChecks({ mixType: 'SMA-13', designMethod: 'marshall' }, params);
+  assert.ok(checks.some(check => check.id === 'sma-vma' && check.ok === false));
+  assert.ok(checks.some(check => check.id === 'sma-vca' && check.ok === false));
+  assert.ok(checks.some(check => check.id === 'rap-moisture' && check.ok === false));
 });
 
 test('getReviewIssues and getProjectReadiness block report freezing on missing OAC and specimen gaps', () => {
@@ -195,6 +231,7 @@ test('getReviewIssues and getProjectReadiness block report freezing on missing O
     oacResult: null,
     performanceRecords: calculatePerformanceChecks(createDefaultPerformanceRecords()),
     reportVersion: createDefaultReportVersion(),
+    specialtyParams: createDefaultSpecialtyParameters(),
   };
   const issues = getReviewIssues(labState);
   assert.ok(issues.some(issue => issue.source === 'OAC' && issue.level === 'blocking'));

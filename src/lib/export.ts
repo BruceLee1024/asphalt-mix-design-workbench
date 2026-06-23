@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
-import type { AsphaltQualityRecord, BasicInfo, MaterialSource, MarshallGroup, MarshallPoint, OacResult, PerformanceCheck, PerformanceTestRecord, ProjectLedger, ReviewIssue, StandardProfile } from '../types';
+import type { AsphaltQualityRecord, BasicInfo, MaterialSource, MarshallGroup, MarshallPoint, OacResult, PerformanceCheck, PerformanceTestRecord, ProjectLedger, ReviewIssue, SpecialtyCheck, SpecialtyParameters, StandardProfile } from '../types';
+import type { ConstructionKnowledgeRecord } from './knowledge/types';
 
 export interface ExportState {
   basicInfo: BasicInfo;
@@ -15,6 +16,10 @@ export interface ExportState {
   checks: PerformanceCheck[];
   performanceRecords: PerformanceTestRecord[];
   reviewIssues: ReviewIssue[];
+  specialtyParams: SpecialtyParameters;
+  specialtyChecks: SpecialtyCheck[];
+  constructionGuidance: ConstructionKnowledgeRecord[];
+  knowledgeVersion: string;
 }
 
 export function exportDesignWorkbook(state: ExportState): string {
@@ -34,6 +39,12 @@ export function exportDesignWorkbook(state: ExportState): string {
       ['报告编号', state.projectLedger.reportCode],
       ['混合料类型', state.basicInfo.mixType],
       ['规范版本', state.standard.label],
+      ['知识库版本', state.knowledgeVersion],
+      ['工程类型', state.basicInfo.projectDomain],
+      ['设计方法', state.basicInfo.designMethod],
+      ['交通等级', state.basicInfo.trafficLevel],
+      ['设计ESALs', state.basicInfo.esals],
+      ['材料体系', state.basicInfo.materialSystem],
       ['沥青标号', state.basicInfo.asphaltGrade],
       ['沥青密度', state.basicInfo.denB],
     ]),
@@ -73,8 +84,22 @@ export function exportDesignWorkbook(state: ExportState): string {
       ...state.checks.map(c => [c.label, c.value, c.requirement, c.ok ? '合格' : '不满足']),
     ] : [['无计算结果']]),
     csvSection('性能验证', [
-      ['验证项目', '实测值', '单位', '要求', '启用', '判定'],
-      ...state.performanceRecords.map(record => [record.label, record.value, record.unit, record.requirement, record.enabled ? '是' : '否', record.ok === true ? '合格' : record.ok === false ? '不满足' : '待补充']),
+      ['验证项目', '实测值', '单位', '要求', '依据', '启用', '判定'],
+      ...state.performanceRecords.map(record => [record.label, record.value, record.unit, record.requirement, record.sourceLabel ?? record.sourceId ?? '', record.enabled ? '是' : '否', record.ok === true ? '合格' : record.ok === false ? '不满足' : '待补充']),
+    ]),
+    csvSection('专项校核', [
+      ['项目', '数值', '要求', '依据', '判定', '说明'],
+      ...state.specialtyChecks.map(check => [check.label, String(check.value), check.requirement, check.sourceId, check.ok === true ? '合格' : check.ok === false ? '不满足' : '待补充', check.message]),
+      [],
+      ['RAP掺量', state.specialtyParams.rap.content],
+      ['RAP含水率', state.specialtyParams.rap.moisture],
+      ['RAP最大粒径', state.specialtyParams.rap.maxParticleSize],
+      ['高模量外掺剂', state.specialtyParams.additives.highModulusAdditiveContent],
+      ['纤维类型', state.specialtyParams.additives.fiberType],
+    ]),
+    csvSection('施工控制', [
+      ['控制项', '建议', '依据', '适用条件'],
+      ...state.constructionGuidance.map(item => [item.label, item.message, `${item.source} ${item.sourceVersion}`, item.condition]),
     ]),
     csvSection('问题台账', [
       ['来源', '级别', '问题', '详情', '处置建议', '责任人', '状态'],
@@ -103,6 +128,11 @@ export async function exportDesignXlsx(state: ExportState): Promise<ArrayBuffer>
     ['批准人', state.projectLedger.approver],
     ['报告编号', state.projectLedger.reportCode],
     ['规范版本', state.standard.label],
+    ['知识库版本', state.knowledgeVersion],
+    ['工程类型', state.basicInfo.projectDomain],
+    ['设计方法', state.basicInfo.designMethod],
+    ['交通等级', state.basicInfo.trafficLevel],
+    ['材料体系', state.basicInfo.materialSystem],
   ]);
   appendSheet(workbook, '原材料', [
     ['材料', '类型', '比例(%)', '毛体积密度', '表观密度', '吸水率(%)', '产地/料场', '规格', '批次', '检测报告号', '针片状', '压碎值', '砂当量', '亲水系数'],
@@ -140,8 +170,22 @@ export async function exportDesignXlsx(state: ExportState): Promise<ArrayBuffer>
     ...state.checks.map(c => [c.label, c.value, c.requirement, c.ok ? '合格' : '不满足']),
   ] : [['无计算结果']]);
   appendSheet(workbook, '性能验证', [
-    ['验证项目', '实测值', '单位', '要求', '启用', '判定'],
-    ...state.performanceRecords.map(record => [record.label, record.value, record.unit, record.requirement, record.enabled ? '是' : '否', record.ok === true ? '合格' : record.ok === false ? '不满足' : '待补充']),
+    ['验证项目', '实测值', '单位', '要求', '依据', '启用', '判定'],
+    ...state.performanceRecords.map(record => [record.label, record.value, record.unit, record.requirement, record.sourceLabel ?? record.sourceId ?? '', record.enabled ? '是' : '否', record.ok === true ? '合格' : record.ok === false ? '不满足' : '待补充']),
+  ]);
+  appendSheet(workbook, '专项校核', [
+    ['项目', '数值', '要求', '依据', '判定', '说明'],
+    ...state.specialtyChecks.map(check => [check.label, String(check.value), check.requirement, check.sourceId, check.ok === true ? '合格' : check.ok === false ? '不满足' : '待补充', check.message]),
+    [],
+    ['RAP掺量', state.specialtyParams.rap.content],
+    ['RAP含水率', state.specialtyParams.rap.moisture],
+    ['RAP最大粒径', state.specialtyParams.rap.maxParticleSize],
+    ['高模量外掺剂', state.specialtyParams.additives.highModulusAdditiveContent],
+    ['纤维类型', state.specialtyParams.additives.fiberType],
+  ]);
+  appendSheet(workbook, '施工控制', [
+    ['控制项', '建议', '依据', '适用条件'],
+    ...state.constructionGuidance.map(item => [item.label, item.message, `${item.source} ${item.sourceVersion}`, item.condition]),
   ]);
   appendSheet(workbook, '问题台账', [
     ['来源', '级别', '问题', '详情', '处置建议', '责任人', '状态'],

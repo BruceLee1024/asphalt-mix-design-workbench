@@ -5,7 +5,7 @@ import { useMixDesign } from '../../store/MixDesignContext';
 import { cn } from '../../lib/utils';
 
 export function VerificationStep() {
-  const { oacResult, basicInfo, performanceRecords, performanceConclusion, updatePerformanceRecord, setStep, markStepDone } = useMixDesign();
+  const { oacResult, basicInfo, performanceRecords, performanceConclusion, updatePerformanceRecord, specialtyChecks, setStep, markStepDone } = useMixDesign();
 
   if (!oacResult) {
     return (
@@ -42,7 +42,7 @@ export function VerificationStep() {
           <table className="w-full border-collapse font-mono text-xs">
             <thead>
               <tr>
-                {['启用', '验证项目', '实测值', '单位', '要求', '判定'].map(h => (
+                {['启用', '验证项目', '实测值', '单位', '要求', '依据', '判定'].map(h => (
                   <th key={h} className="bg-app-bg text-text3 text-[10px] tracking-wide py-2.5 px-3 text-center border-b border-border font-normal whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -64,6 +64,7 @@ export function VerificationStep() {
                   </td>
                   <td className="py-2.5 px-3 text-center border-b border-border2/60 text-text3">{record.unit}</td>
                   <td className="py-2.5 px-3 text-center border-b border-border2/60 text-text3">{record.requirement}</td>
+                  <td className="py-2.5 px-3 text-center border-b border-border2/60 text-text3">{record.sourceLabel ?? record.sourceId ?? '-'}</td>
                   <td className={cn("py-2.5 px-3 text-center border-b border-border2/60 font-bold", record.ok === true ? "text-green" : record.ok === false ? "text-red" : "text-yellow")}>
                     {record.ok === true ? '合格' : record.ok === false ? '不满足' : '待补充'}
                   </td>
@@ -77,6 +78,23 @@ export function VerificationStep() {
           {performanceConclusion === '已通过' ? '路用性能验证已通过。' : performanceConclusion === '需复核' ? '存在路用性能验证不合格项，报告不可正式交付。' : '目标配合比完成，性能验证待补充。'}
         </div>
       </Card>
+
+      {specialtyChecks.length ? (
+        <Card title="专项校核结果">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {specialtyChecks.map(check => (
+              <div key={check.id} className={cn("rounded-sm border px-4 py-3 bg-app-bg", check.ok === true ? "border-green/25" : check.ok === false ? "border-red/25" : "border-yellow/25")}>
+                <div className="flex items-center gap-2 text-[10px] text-text3 font-mono tracking-widest uppercase">
+                  {check.ok === true ? <CheckCircle2 className="w-3.5 h-3.5 text-green" /> : check.ok === false ? <AlertTriangle className="w-3.5 h-3.5 text-red" /> : <CircleDashed className="w-3.5 h-3.5 text-yellow" />}
+                  {check.label}
+                </div>
+                <div className="mt-2 font-mono text-[16px] font-bold text-text1">{check.value}</div>
+                <div className="mt-1 text-[10px] font-mono text-text3">{check.requirement} · {check.sourceId}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <Card title="综合评价">
         <div className="bg-surface2 border border-border rounded-lg overflow-hidden">

@@ -1,9 +1,9 @@
 import React, { useRef } from 'react';
-import { ArrowUpRight, Beaker, Download, RotateCcw, Upload } from 'lucide-react';
+import { ArrowUpRight, Beaker, BookOpen, Download, RotateCcw, Upload } from 'lucide-react';
 import { Button } from '../ui';
 import { useMixDesign } from '../../store/MixDesignContext';
 
-export function TopNav({ onExport }: { onOpenAi?: () => void; onExport: () => void }) {
+export function TopNav({ onExport, onKnowledge }: { onOpenAi?: () => void; onExport: () => void; onKnowledge: () => void }) {
   const { exportJson, importJson, resetProject } = useMixDesign();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -43,6 +43,9 @@ export function TopNav({ onExport }: { onOpenAi?: () => void; onExport: () => vo
         </Button>
         <Button variant="ghost" size="sm" onClick={resetProject} className="h-9 px-3">
           <RotateCcw className="w-4 h-4" /> 新建
+        </Button>
+        <Button variant="ghost" size="sm" onClick={onKnowledge} className="h-9 px-3">
+          <BookOpen className="w-4 h-4" /> 知识库
         </Button>
         <Button variant="ghost" size="sm" onClick={onExport} className="h-9 px-4">
           <ArrowUpRight className="w-4 h-4" /> 导出报告

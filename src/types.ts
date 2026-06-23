@@ -1,16 +1,25 @@
 export type RoadGrade = 'hw' | '2nd' | '3rd';
-export type MixType = 'AC-13' | 'AC-16' | 'AC-20' | 'AC-25' | 'SMA-13' | 'OGFC-13';
+export type MixType = 'AC-13' | 'AC-16' | 'AC-20' | 'AC-25' | 'SMA-13' | 'OGFC-13' | 'HM-20' | 'RAP-AC-20' | 'CMA-13';
 export type LayerPos = 'top' | 'mid' | 'bot';
 export type StandardProfileId = 'jtg-f40-2004-jtg3410-2025' | 'jtg-f40-2004-jtge20-2011';
-export type MaterialType = 'coarse' | 'fine' | 'filler';
+export type MaterialType = 'coarse' | 'fine' | 'filler' | 'rap' | 'fiber' | 'additive';
 export type ReportStatus = 'draft' | 'frozen';
 export type PerformanceStatus = 'pending' | 'passed' | 'failed';
+export type ProjectDomain = 'road' | 'airport';
+export type DesignMethod = 'marshall' | 'patent-oac' | 'superpave';
+export type TrafficLevel = 'light' | 'medium' | 'heavy' | 'very-heavy';
+export type MaterialSystem = 'base' | 'modified' | 'sma' | 'high-modulus' | 'rap' | 'cold-mix';
 
 export interface BasicInfo {
   mixType: MixType;
   roadGrade: RoadGrade;
   layerPos: LayerPos;
   standardProfileId: StandardProfileId;
+  projectDomain: ProjectDomain;
+  designMethod: DesignMethod;
+  trafficLevel: TrafficLevel;
+  esals: number;
+  materialSystem: MaterialSystem;
   climate: string;
   projName: string;
   projUnit: string;
@@ -19,6 +28,55 @@ export interface BasicInfo {
   gammaSb: number;
   gammaSa: number;
   wa: number;
+}
+
+export interface RapParameters {
+  enabled: boolean;
+  content: number;
+  moisture: number;
+  maxParticleSize: number;
+  falseParticleContent: number;
+}
+
+export interface SuperpaveParameters {
+  nini: number;
+  ndes: number;
+  nmax: number;
+  pressureKpa: number;
+  angleDeg: number;
+  speedRpm: number;
+  gmmAtNdes: number;
+  gmmAtNmax: number;
+  asphaltContentAtNdes: number;
+}
+
+export interface SmaParameters {
+  vma: number;
+  vcadrc: number;
+  vcamix: number;
+  fiberContent: number;
+  draindownLoss: number;
+  cantabroLoss: number;
+}
+
+export interface AdditiveParameters {
+  highModulusAdditiveContent: number;
+  fiberType: string;
+  antiStrippingAgentContent: number;
+}
+
+export interface SpecialtyParameters {
+  rap: RapParameters;
+  superpave: SuperpaveParameters;
+  sma: SmaParameters;
+  additives: AdditiveParameters;
+}
+
+export interface SpecialtyParameterPatch {
+  rap?: Partial<RapParameters>;
+  superpave?: Partial<SuperpaveParameters>;
+  sma?: Partial<SmaParameters>;
+  additives?: Partial<AdditiveParameters>;
 }
 
 export interface GradingData {
@@ -69,6 +127,27 @@ export interface ProjectLedger {
   reportCode: string;
 }
 
+export interface ProjectRecord {
+  id: string;
+  projectCode: string;
+  name: string;
+  clientUnit: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MixDesignRecordSummary {
+  id: string;
+  projectId: string;
+  name: string;
+  mixType: MixType;
+  sampleCode: string;
+  testDate: string;
+  reportCode: string;
+  reportStatus: ReportStatus;
+  updatedAt: string;
+}
+
 export interface MaterialQualityRecord {
   origin: string;
   specification: string;
@@ -112,11 +191,13 @@ export interface MarshallGroup {
 
 export interface PerformanceTestRecord {
   id: string;
-  key: 'waterStability' | 'rutting' | 'lowTemperature' | 'permeability';
+  key: 'waterStability' | 'freezeThaw' | 'rutting' | 'lowTemperature' | 'permeability' | 'schellenberg' | 'cantabro' | 'cdf';
   label: string;
   value: number;
   unit: string;
   requirement: string;
+  sourceId?: string;
+  sourceLabel?: string;
   enabled: boolean;
   ok: boolean | null;
 }
@@ -198,6 +279,8 @@ export interface InputAudit {
 }
 
 export interface OacResult {
+  method?: DesignMethod;
+  sourceId?: string;
   oac: number;
   oac1: number;
   oac2: number | null;
@@ -215,6 +298,17 @@ export interface OacResult {
   vfa: number;
   checks: PerformanceCheck[];
   warnings: string[];
+}
+
+export interface SpecialtyCheck {
+  id: string;
+  label: string;
+  value: number | string;
+  requirement: string;
+  ok: boolean | null;
+  sourceId: string;
+  message: string;
+  severity: 'info' | 'warning' | 'blocking';
 }
 
 export interface AiMessage {

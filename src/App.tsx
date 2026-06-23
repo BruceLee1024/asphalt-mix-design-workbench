@@ -7,16 +7,22 @@ import { AiPanel } from './components/layout/AiPanel';
 import {
   ArrowRight,
   BarChart3,
+  CheckCircle2,
   ClipboardCheck,
   FileCheck2,
   FlaskConical,
+  Gauge,
   Layers3,
   MessageCircle,
   QrCode,
+  Ruler,
   Settings2,
   Sparkles,
   Target,
+  TrendingUp,
   UserRound,
+  Zap,
+  type LucideIcon,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -28,6 +34,7 @@ import { MarshallStep } from './components/steps/MarshallStep';
 import { ResultsStep } from './components/steps/ResultsStep';
 import { VerificationStep } from './components/steps/VerificationStep';
 import { ReportStep } from './components/steps/ReportStep';
+import { KnowledgeStep } from './components/steps/KnowledgeStep';
 
 function LandingPage({ onStart }: { onStart: () => void }) {
   const heroCanvasRef = React.useRef<HTMLCanvasElement>(null);
@@ -372,13 +379,56 @@ function LandingPage({ onStart }: { onStart: () => void }) {
         <div className="hero-bottom-fade" />
 
         <div className="hero-content">
-          <div className="hero-eyebrow"><span className="hero-eyebrow-dot" />JTG F40-2004 &nbsp;·&nbsp; 马歇尔配合比设计法 &nbsp;·&nbsp; 专业版</div>
-          <h1 className="hero-headline">沥青混凝土<br /><em>配合比设计</em><br />系统</h1>
-          <div className="hero-rule" />
-          <p className="hero-desc">专为公路工程师打造的<strong>数字化设计工具</strong>，矿料级配 · 油石比计算 · 马歇尔验证，全流程内置 JTG F40 规范，结果精准可溯，一键输出设计报告。</p>
-          <div className="hero-cta-group">
-            <button type="button" onClick={onStart} className="btn-cta btn-cta-primary">立即开始设计 <ArrowRight className="h-4 w-4" /></button>
-            <a href="#process" className="btn-cta btn-cta-ghost">查看设计流程</a>
+          <div className="hero-copy">
+            <div className="hero-eyebrow"><span className="hero-eyebrow-dot" />JTG F40-2004 &nbsp;·&nbsp; 马歇尔配合比设计法 &nbsp;·&nbsp; 专业版</div>
+            <h1 className="hero-headline">
+              <span>沥青混凝土</span>
+              <em>配合比设计</em>
+              <small>智能工作台</small>
+            </h1>
+            <p className="hero-desc">把矿料级配、最佳油石比、马歇尔验证和报告输出放进同一个工作台。规范自动对照，计算过程可追溯，适合目标配合比设计与复核交付。</p>
+            <div className="hero-proof-row" aria-label="产品能力">
+              {['规范内置', '过程留痕', '报告可导出'].map((item) => (
+                <span key={item}><CheckCircle2 aria-hidden="true" />{item}</span>
+              ))}
+            </div>
+            <div className="hero-cta-group">
+              <button type="button" onClick={onStart} className="btn-cta btn-cta-primary">进入设计工作台 <ArrowRight className="h-4 w-4" /></button>
+              <a href="#process" className="btn-cta btn-cta-ghost">查看设计流程</a>
+            </div>
+          </div>
+
+          <div className="hero-workbench" aria-label="配合比设计工作台预览">
+            <div className="hero-workbench-head">
+              <div>
+                <span>LIVE DESIGN BOARD</span>
+                <strong>AC-13 上面层目标配合比</strong>
+              </div>
+              <em>PASS</em>
+            </div>
+            <div className="hero-workbench-chart">
+              <div className="hero-spec-band" />
+              <div className="hero-chart-line hero-chart-line-main" />
+              <div className="hero-chart-line hero-chart-line-ghost" />
+            </div>
+            <div className="hero-workbench-grid">
+              {[
+                ['OAC', '4.58%', '四分法推导'],
+                ['VV', '4.1%', '3-5% 合格'],
+                ['MS', '9.2kN', '≥8.0 合格'],
+                ['VMA', '15.5%', '≥15 合格'],
+              ].map(([label, value, hint]) => (
+                <div key={label}>
+                  <span>{label}</span>
+                  <strong>{value}</strong>
+                  <em>{hint}</em>
+                </div>
+              ))}
+            </div>
+            <div className="hero-workbench-foot">
+              <span><Gauge aria-hidden="true" />规范自动校验</span>
+              <span><FileCheck2 aria-hidden="true" />报告生成就绪</span>
+            </div>
           </div>
         </div>
 
@@ -478,9 +528,9 @@ function LandingPage({ onStart }: { onStart: () => void }) {
         </div>
       </section>
 
-      <section id="features" className="acmix-section"><div className="container"><div className="sec-label">功能特性</div><h2 className="sec-title">每个细节<br />都为工程师设计</h2>
-        <div className="features-layout"><div className="features-visual"><span className="feat-tag">GRADING CURVE</span><canvas ref={gradingCanvasRef} /></div><div><h3 className="feature-title">实时级配曲线<br />可视化校验</h3><p className="feature-copy">规范上下限以半透明带形区域展示，设计曲线实时跟随输入变化。超出范围的筛孔节点自动标红，偏差值实时显示。</p><FeatureList items={[['📐','折线图 / 柱状图切换','两种视图方式，清晰呈现每个筛孔通过率'],['⚡','一键填入规范中值','快速完成级配初始方案，再手动调整优化'],['🔍','中值偏差实时计算','量化显示每个筛孔距中值的偏差，便于评判']]} /></div></div>
-        <div className="features-layout reverse"><div className="features-visual"><span className="feat-tag">MARSHALL CHART</span><canvas ref={marshallCanvasRef} /></div><div><h3 className="feature-title">四面板马歇尔<br />指标图表</h3><p className="feature-copy">稳定度、密度、空隙率、VFA 同步展示，OAC 竖线贯穿四图，各指标在最优油石比处的取值一目了然。</p><FeatureList items={[['🎯','四分法自动推导 OAC','抛物线插值精确求各指标最优油石比'],['📈','平滑插值曲线','区域填充 + 辉光节点，直观呈现变化趋势'],['🧮','OAC 推导过程透明','显示 a₁~a₄ 的完整推导步骤，数据可溯']]} /></div></div>
+      <section id="features" className="acmix-section"><div className="container"><div className="sec-label">功能特性</div><h2 className="sec-title">把易错环节<br />变成可检查的流程</h2>
+        <div className="features-layout"><div className="features-visual"><span className="feat-tag">GRADING CURVE</span><canvas ref={gradingCanvasRef} /></div><div><h3 className="feature-title">级配曲线实时校验</h3><p className="feature-copy">规范上下限以带形区域展示，设计曲线跟随录入数据更新。筛孔通过率、规范中值和偏差提示集中呈现，减少来回查表与重复录入。</p><FeatureList items={[[Ruler,'折线图 / 柱状图切换','两种视图方式，清晰呈现每个筛孔通过率'],[Zap,'一键填入规范中值','快速生成初始方案，再手动调整优化'],[Gauge,'中值偏差实时计算','量化显示每个筛孔距规范中值的偏差']]} /></div></div>
+        <div className="features-layout reverse"><div className="features-visual"><span className="feat-tag">MARSHALL CHART</span><canvas ref={marshallCanvasRef} /></div><div><h3 className="feature-title">马歇尔指标联动推导</h3><p className="feature-copy">稳定度、密度、空隙率、VMA、VFA 统一进入 OAC 计算链路，关键取值、规范范围和验证结论都能回到原始试验数据。</p><FeatureList items={[[Target,'四分法自动推导 OAC','抛物线插值求各指标对应油石比'],[TrendingUp,'指标曲线同步展示','趋势、交点与 OAC 竖线在同一视图中呈现'],[ClipboardCheck,'推导过程透明','显示 a1-a4 的完整依据，便于复核与归档']]} /></div></div>
       </div></section>
 
       <section id="metrics" className="acmix-section"><div className="container"><div className="sec-label">数字说话</div><h2 className="sec-title">内置规范数据<br />计算结果精准可靠</h2><div className="metrics-grid">{[['6','内置混合料类型\nAC-13 / 16 / 20 / 25 + SMA + OGFC'],['10+','每种类型筛孔数量\n覆盖全粒径范围'],['5','马歇尔验证指标\nMS · FL · VV · VMA · VFA'],['0','手动查规范次数\n全部内置，自动对照']].map(([v,l]) => <div className="metric-card" key={v}><div className="metric-val">{v}</div><div className="metric-label">{l.split('\n').map((line, i) => <React.Fragment key={line}>{i > 0 && <br />}{line}</React.Fragment>)}</div></div>)}</div></div></section>
@@ -523,8 +573,8 @@ function LandingPage({ onStart }: { onStart: () => void }) {
   );
 }
 
-function FeatureList({ items }: { items: string[][] }) {
-  return <ul className="feat-list">{items.map(([icon, title, copy]) => <li key={title}><div className="feat-icon">{icon}</div><div className="feat-text"><h4>{title}</h4><p>{copy}</p></div></li>)}</ul>;
+function FeatureList({ items }: { items: Array<[LucideIcon, string, string]> }) {
+  return <ul className="feat-list">{items.map(([Icon, title, copy]) => <li key={title}><div className="feat-icon"><Icon aria-hidden="true" /></div><div className="feat-text"><h4>{title}</h4><p>{copy}</p></div></li>)}</ul>;
 }
 
 function MainContent() {
@@ -533,7 +583,7 @@ function MainContent() {
 
   return (
     <div className="h-screen w-full flex flex-col bg-app-bg text-text1 overflow-hidden font-sans relative">
-      <TopNav onExport={() => setStep(7)} />
+      <TopNav onExport={() => setStep(7)} onKnowledge={() => setStep(8)} />
       
       <div className="flex flex-1 overflow-hidden relative">
         <Sidebar />
@@ -567,6 +617,9 @@ function MainContent() {
               <div style={{ display: step === 7 ? 'block' : 'none' }} className="print:block">
                 <ReportStep onOpenAi={() => setAiOpen(true)} />
               </div>
+              <StepPanel active={step === 8}>
+                <KnowledgeStep />
+              </StepPanel>
             </div>
             
             <footer className="mt-20 pt-6 border-t border-border font-mono text-[11px] text-text3 text-left print:hidden w-full">

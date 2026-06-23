@@ -1,4 +1,4 @@
-import type { BasicInfo, BlendDesign, MarshallPoint, MarshallSpec, OacResult, PerformanceCheck, MaterialSource } from '../types';
+import type { BasicInfo, BlendDesign, MarshallPoint, MarshallSpec, OacResult, PerformanceCheck, MaterialSource, SpecialtyCheck, SpecialtyParameters } from '../types';
 
 export function interp(xs: number[], ys: number[], x: number): number {
   if (xs.length === 0 || ys.length === 0) return 0;
@@ -173,6 +173,8 @@ export function calculateOacAnalysis(points: MarshallPoint[], spec: MarshallSpec
   const checks = buildPerformanceChecks(finalPoint, spec);
 
   return {
+    method: 'marshall',
+    sourceId: 'marshall-oac-common-range',
     oac: round(oac, 3),
     oac1: round(oac1, 3),
     oac2,
@@ -191,6 +193,140 @@ export function calculateOacAnalysis(points: MarshallPoint[], spec: MarshallSpec
     checks,
     warnings,
   };
+}
+
+export function calculatePatentOac(vv1: number, vfa1: number, vv2: number, vfa2: number): OacResult | null {
+  if (vv1 <= 0.4 || vv2 <= 0.4 || !vfa1 || !vfa2) return null;
+  const oac2 = 2.52 / (vv2 - 0.4) + 7.85e-4 * vfa2 ** 2 - 0.066 * vfa2 + 4.89;
+  const oac = 1.96e-4 * vfa1 ** 2 - 0.0165 * vfa1 + 0.63 / (vv1 - 0.4) + 2.42 + oac2 / 2;
+  const warnings: string[] = [];
+  if (vv1 < 3 || vv1 > 6 || vv2 < 3 || vv2 > 6) warnings.push('专利 OAC 直算输入 VV 超出常用目标范围，需复核适用性。');
+  if (vfa1 < 60 || vfa1 > 80 || vfa2 < 60 || vfa2 > 80) warnings.push('专利 OAC 直算输入 VFA 超出常用目标范围，需复核适用性。');
+
+  return {
+    method: 'patent-oac',
+    sourceId: 'patent-modified-asphalt-oac',
+    oac: round(oac, 3),
+    oac1: round(oac, 3),
+    oac2: round(oac2, 3),
+    oacMin: null,
+    oacMax: null,
+    a1: 0,
+    a2: 0,
+    a3: 0,
+    a4: null,
+    den: 0,
+    ms: 0,
+    fl: 0,
+    vv: round(vv1, 1),
+    vma: 0,
+    vfa: round(vfa1, 1),
+    checks: [],
+    warnings,
+  };
+}
+
+export function calculateSuperpaveResult(params: SpecialtyParameters['superpave']): OacResult | null {
+  if (!params.asphaltContentAtNdes || !params.gmmAtNdes) return null;
+  const warnings: string[] = [];
+  if (Math.abs(params.gmmAtNdes - 96) > 0.5) warnings.push('Ndes 压实度未接近 96%Gmm（空隙率 4%），应通过试验插值修正最佳沥青用量。');
+  if (params.gmmAtNmax >= 98) warnings.push('Nmax 压实度不小于 98%Gmm，存在后期压密、车辙或泛油风险。');
+  return {
+    method: 'superpave',
+    sourceId: 'superpave-sgc-4vv',
+    oac: round(params.asphaltContentAtNdes, 3),
+    oac1: round(params.asphaltContentAtNdes, 3),
+    oac2: null,
+    oacMin: null,
+    oacMax: null,
+    a1: params.nini,
+    a2: params.ndes,
+    a3: params.nmax,
+    a4: null,
+    den: 0,
+    ms: 0,
+    fl: 0,
+    vv: round(100 - params.gmmAtNdes, 1),
+    vma: 0,
+    vfa: 0,
+    checks: [],
+    warnings,
+  };
+}
+
+export function buildSpecialtyChecks(basicInfo: Pick<BasicInfo, 'mixType' | 'designMethod'>, params: SpecialtyParameters): SpecialtyCheck[] {
+  const checks: SpecialtyCheck[] = [];
+
+  if (basicInfo.mixType === 'SMA-13') {
+    checks.push({
+      id: 'sma-vma',
+      label: 'SMA VMA',
+      value: params.sma.vma ? `${params.sma.vma}%` : '待录入',
+      requirement: 'VMA >= 18%',
+      ok: params.sma.vma > 0 ? params.sma.vma >= 18 : null,
+      sourceId: 'term-vma',
+      message: 'SMA 应满足足够矿料间隙率以容纳玛蹄脂并保证耐久性。',
+      severity: 'blocking',
+    });
+    checks.push({
+      id: 'sma-vca',
+      label: 'SMA 粗集料骨架间隙率',
+      value: params.sma.vcadrc && params.sma.vcamix ? `${params.sma.vcamix}% / ${params.sma.vcadrc}%` : '待录入',
+      requirement: 'VCAmix <= VCADRC',
+      ok: params.sma.vcadrc > 0 && params.sma.vcamix > 0 ? params.sma.vcamix <= params.sma.vcadrc : null,
+      sourceId: 'term-vca',
+      message: 'VCAmix 不大于 VCADRC 时，粗集料骨架嵌挤结构判定为有效。',
+      severity: 'blocking',
+    });
+  }
+
+  if (params.rap.enabled || basicInfo.mixType === 'RAP-AC-20') {
+    checks.push({
+      id: 'rap-moisture',
+      label: 'RAP 含水率',
+      value: `${params.rap.moisture}%`,
+      requirement: '<= 3%',
+      ok: params.rap.moisture > 0 ? params.rap.moisture <= 3 : null,
+      sourceId: 'mat-rap',
+      message: 'RAP 含水率超限会造成加热能耗升高、拌和不均和水稳定风险。',
+      severity: 'blocking',
+    });
+    checks.push({
+      id: 'rap-max-size',
+      label: 'RAP 最大颗粒粒径',
+      value: `${params.rap.maxParticleSize}mm`,
+      requirement: '<= 26.5mm',
+      ok: params.rap.maxParticleSize > 0 ? params.rap.maxParticleSize <= 26.5 : null,
+      sourceId: 'mat-rap',
+      message: 'RAP 最大颗粒粒径宜不大于 26.5mm，超限时应破碎筛分或调整再生料处理工艺。',
+      severity: 'blocking',
+    });
+  }
+
+  if (basicInfo.designMethod === 'superpave') {
+    checks.push({
+      id: 'superpave-ndes',
+      label: 'Ndes 空隙率',
+      value: params.superpave.gmmAtNdes ? `${round(100 - params.superpave.gmmAtNdes, 1)}%` : '待录入',
+      requirement: 'VV = 4%',
+      ok: params.superpave.gmmAtNdes > 0 ? Math.abs(params.superpave.gmmAtNdes - 96) <= 0.5 : null,
+      sourceId: 'superpave-sgc-4vv',
+      message: 'Superpave 以 Ndes 转数下空隙率 4% 对应沥青含量作为设计沥青用量。',
+      severity: 'blocking',
+    });
+    checks.push({
+      id: 'superpave-nmax',
+      label: 'Nmax 压密度',
+      value: params.superpave.gmmAtNmax ? `${params.superpave.gmmAtNmax}%Gmm` : '待录入',
+      requirement: '< 98%Gmm',
+      ok: params.superpave.gmmAtNmax > 0 ? params.superpave.gmmAtNmax < 98 : null,
+      sourceId: 'superpave-sgc-nmax',
+      message: 'Nmax 压密度应小于 98%Gmm，以降低后期车辙和泛油风险。',
+      severity: 'blocking',
+    });
+  }
+
+  return checks;
 }
 
 export function buildPerformanceChecks(point: Pick<MarshallPoint, 'ms' | 'fl' | 'vv' | 'vma' | 'vfa'>, spec: MarshallSpec): PerformanceCheck[] {

@@ -12,8 +12,11 @@ import type {
   ProjectReadiness,
   ReportVersion,
   ReviewIssue,
+  SpecialtyParameters,
+  SpecialtyCheck,
 } from '../types';
 import { calculateVolumetrics, round } from './math';
+import { formatRequirement, getPerformanceRequirements } from './knowledge';
 
 export interface LabStateInput {
   basicInfo: BasicInfo;
@@ -27,6 +30,8 @@ export interface LabStateInput {
   oacResult: OacResult | null;
   performanceRecords: PerformanceTestRecord[];
   reportVersion: ReportVersion;
+  specialtyParams: SpecialtyParameters;
+  specialtyChecks?: SpecialtyCheck[];
 }
 
 export function createDefaultProjectLedger(): ProjectLedger {
@@ -73,13 +78,36 @@ export function createDefaultReportVersion(): ReportVersion {
   return { status: 'draft', version: '0.1', frozenAt: '', dataHash: '' };
 }
 
-export function createDefaultPerformanceRecords(): PerformanceTestRecord[] {
-  return [
-    { id: 'water-stability', key: 'waterStability', label: '浸水马歇尔残留稳定度', value: 0, unit: '%', requirement: '≥ 80 %', enabled: true, ok: null },
-    { id: 'rutting', key: 'rutting', label: '车辙动稳定度', value: 0, unit: '次/mm', requirement: '≥ 1000 次/mm', enabled: true, ok: null },
-    { id: 'low-temperature', key: 'lowTemperature', label: '低温弯曲破坏应变', value: 0, unit: 'με', requirement: '≥ 2000 με', enabled: true, ok: null },
-    { id: 'permeability', key: 'permeability', label: '渗水系数', value: 0, unit: 'mL/min', requirement: '≤ 120 mL/min', enabled: true, ok: null },
-  ];
+export function createDefaultSpecialtyParameters(): SpecialtyParameters {
+  return {
+    rap: { enabled: false, content: 0, moisture: 0, maxParticleSize: 0, falseParticleContent: 0 },
+    superpave: { nini: 8, ndes: 100, nmax: 160, pressureKpa: 600, angleDeg: 1.16, speedRpm: 30, gmmAtNdes: 0, gmmAtNmax: 0, asphaltContentAtNdes: 0 },
+    sma: { vma: 0, vcadrc: 0, vcamix: 0, fiberContent: 0.3, draindownLoss: 0, cantabroLoss: 0 },
+    additives: { highModulusAdditiveContent: 0, fiberType: '木质素纤维', antiStrippingAgentContent: 0 },
+  };
+}
+
+export function createDefaultPerformanceRecords(basicInfo?: Pick<BasicInfo, 'mixType' | 'designMethod' | 'materialSystem' | 'projectDomain'>): PerformanceTestRecord[] {
+  if (!basicInfo) {
+    return [
+      { id: 'water-stability', key: 'waterStability', label: '浸水马歇尔残留稳定度', value: 0, unit: '%', requirement: '>= 85 %', sourceId: 'perf-water-stability', sourceLabel: 'JTG F40', enabled: true, ok: null },
+      { id: 'freeze-thaw', key: 'freezeThaw', label: '冻融劈裂残留强度比', value: 0, unit: '%', requirement: '>= 80 %', sourceId: 'perf-freeze-thaw', sourceLabel: 'JTG F40', enabled: true, ok: null },
+      { id: 'rutting', key: 'rutting', label: '车辙动稳定度', value: 0, unit: '次/mm', requirement: '>= 3500 次/mm', sourceId: 'perf-rutting-modified', sourceLabel: 'JTG F40 / 项目性能要求', enabled: true, ok: null },
+      { id: 'low-temperature', key: 'lowTemperature', label: '低温弯曲破坏应变', value: 0, unit: 'με', requirement: '>= 2300 με', sourceId: 'perf-low-temp', sourceLabel: 'JTG F40 / 高模量专项要求', enabled: true, ok: null },
+    ];
+  }
+  return getPerformanceRequirements(basicInfo).map(rule => ({
+    id: rule.id,
+    key: rule.key as PerformanceTestRecord['key'],
+    label: rule.label,
+    value: 0,
+    unit: rule.unit ?? '',
+    requirement: formatRequirement(rule),
+    sourceId: rule.id,
+    sourceLabel: `${rule.source} ${rule.sourceVersion}`,
+    enabled: true,
+    ok: null,
+  }));
 }
 
 export function createMarshallGroups(baseOac: number, specimenCount: 3 | 4 = 3): MarshallGroup[] {
@@ -140,12 +168,14 @@ export function calculateMarshallGroup(group: MarshallGroup, basicInfo: Pick<Bas
   return { ...group, point, warnings: [...warnings, ...auditMarshallPoint(point)] };
 }
 
-export function calculatePerformanceChecks(records: PerformanceTestRecord[]): PerformanceTestRecord[] {
+export function calculatePerformanceChecks(records: PerformanceTestRecord[], basicInfo?: Pick<BasicInfo, 'mixType' | 'designMethod' | 'materialSystem' | 'projectDomain'>): PerformanceTestRecord[] {
+  const rules = basicInfo ? getPerformanceRequirements(basicInfo) : [];
   return records.map(record => {
     if (!record.enabled || record.value <= 0) return { ...record, ok: null };
+    const rule = rules.find(item => item.id === record.sourceId || item.key === record.key);
+    if (rule?.comparator === 'lte') return { ...record, ok: rule.range?.hi === null ? null : record.value <= (rule.range?.hi ?? Number.POSITIVE_INFINITY), requirement: formatRequirement(rule), sourceLabel: `${rule.source} ${rule.sourceVersion}` };
+    if (rule?.comparator === 'gte') return { ...record, ok: record.value >= (rule.range?.lo ?? Number.NEGATIVE_INFINITY), requirement: formatRequirement(rule), sourceLabel: `${rule.source} ${rule.sourceVersion}` };
     if (record.key === 'permeability') return { ...record, ok: record.value <= 120 };
-    if (record.key === 'rutting') return { ...record, ok: record.value >= 1000 };
-    if (record.key === 'lowTemperature') return { ...record, ok: record.value >= 2000 };
     return { ...record, ok: record.value >= 80 };
   });
 }
@@ -175,6 +205,10 @@ export function getReviewIssues(state: LabStateInput): ReviewIssue[] {
   const performanceConclusion = getPerformanceConclusion(state.performanceRecords);
   if (performanceConclusion === '待补充') add('性能验证', 'warning', '性能验证待补充', '水稳定性、车辙、低温或渗水指标尚未完整录入。', '补录性能验证结果后再形成最终交付结论。');
   if (performanceConclusion === '需复核') add('性能验证', 'blocking', '性能验证不满足要求', '存在性能验证指标不合格。', '调整设计或复验后重新判定。');
+  state.specialtyChecks?.forEach(check => {
+    if (check.ok === false) add('专项校核', check.severity === 'blocking' ? 'blocking' : 'warning', `${check.label} 不满足`, check.message, '调整专项参数或重新设计后复核。');
+    if (check.ok === null && check.severity === 'blocking') add('专项校核', 'warning', `${check.label} 待补充`, check.message, '补录专项校核参数。');
+  });
 
   return issues;
 }

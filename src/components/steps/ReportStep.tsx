@@ -24,6 +24,10 @@ export function ReportStep({ onOpenAi }: { onOpenAi: (prefill: string) => void }
     performanceRecords,
     performanceConclusion,
     reviewIssues,
+    specialtyParams,
+    specialtyChecks,
+    constructionGuidance,
+    knowledgeVersion,
     projectReadiness,
     reportVersion,
     freezeReport,
@@ -50,6 +54,10 @@ export function ReportStep({ onOpenAi }: { onOpenAi: (prefill: string) => void }
       checks: oacResult?.checks ?? [],
       performanceRecords,
       reviewIssues,
+      specialtyParams,
+      specialtyChecks,
+      constructionGuidance,
+      knowledgeVersion,
     });
     downloadTextFile('asphalt-mix-design.csv', csv);
   };
@@ -69,6 +77,10 @@ export function ReportStep({ onOpenAi }: { onOpenAi: (prefill: string) => void }
       checks: oacResult?.checks ?? [],
       performanceRecords,
       reviewIssues,
+      specialtyParams,
+      specialtyChecks,
+      constructionGuidance,
+      knowledgeVersion,
     });
     downloadBinaryFile('asphalt-mix-design-workbook.xlsx', xlsx);
   };
@@ -117,6 +129,18 @@ export function ReportStep({ onOpenAi }: { onOpenAi: (prefill: string) => void }
               <Row k="合成毛体积密度" v={`${basicInfo.gammaSb} g/cm³`} />
               <Row k="合成表观密度" v={`${basicInfo.gammaSa} g/cm³`} />
               <Row k="规范版本" v={standardProfile.label} />
+              <Row k="知识库版本" v={knowledgeVersion} />
+            </div>
+          </div>
+          <div>
+            <SLabel className="mb-3">设计路径</SLabel>
+            <div className="bg-surface2 border border-border rounded-lg overflow-hidden">
+              <Row k="工程类型" v={basicInfo.projectDomain === 'airport' ? '机场道面' : '公路工程'} />
+              <Row k="设计方法" v={basicInfo.designMethod} />
+              <Row k="交通等级" v={basicInfo.trafficLevel} />
+              <Row k="设计 ESALs" v={basicInfo.esals || '-'} />
+              <Row k="材料体系" v={basicInfo.materialSystem} />
+              <Row k="气候分区" v={basicInfo.climate} />
             </div>
           </div>
           <div>
@@ -186,7 +210,7 @@ export function ReportStep({ onOpenAi }: { onOpenAi: (prefill: string) => void }
           <table className="w-full border-collapse font-mono text-[12px]">
             <thead>
               <tr>
-                {['验证项目', '实测值', '单位', '要求', '判定'].map(h => (
+                {['验证项目', '实测值', '单位', '要求', '依据', '判定'].map(h => (
                   <th key={h} className="bg-app-bg text-text3 text-[10px] tracking-wide py-2.5 px-3 text-center border-b border-border font-normal">{h}</th>
                 ))}
               </tr>
@@ -198,11 +222,50 @@ export function ReportStep({ onOpenAi }: { onOpenAi: (prefill: string) => void }
                   <td className="py-2.5 px-3 text-center border-b border-border2/50">{record.value || '-'}</td>
                   <td className="py-2.5 px-3 text-center border-b border-border2/50">{record.unit}</td>
                   <td className="py-2.5 px-3 text-center border-b border-border2/50">{record.requirement}</td>
+                  <td className="py-2.5 px-3 text-center border-b border-border2/50">{record.sourceLabel ?? record.sourceId ?? '-'}</td>
                   <td className={cn("py-2.5 px-3 text-center border-b border-border2/50 font-bold", record.ok === true ? "text-green" : record.ok === false ? "text-red" : "text-yellow")}>{record.ok === true ? '合格' : record.ok === false ? '不满足' : '待补充'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+
+        <SLabel className="mb-3">专项校核</SLabel>
+        <div className="overflow-x-auto mb-5">
+          <table className="w-full border-collapse font-mono text-[12px]">
+            <thead>
+              <tr>
+                {['项目', '数值', '要求', '依据', '判定'].map(h => (
+                  <th key={h} className="bg-app-bg text-text3 text-[10px] tracking-wide py-2.5 px-3 text-center border-b border-border font-normal">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {specialtyChecks.length ? specialtyChecks.map(check => (
+                <tr key={check.id}>
+                  <td className="py-2.5 px-3 text-center border-b border-border2/50">{check.label}</td>
+                  <td className="py-2.5 px-3 text-center border-b border-border2/50">{check.value}</td>
+                  <td className="py-2.5 px-3 text-center border-b border-border2/50">{check.requirement}</td>
+                  <td className="py-2.5 px-3 text-center border-b border-border2/50">{check.sourceId}</td>
+                  <td className={cn("py-2.5 px-3 text-center border-b border-border2/50 font-bold", check.ok === true ? "text-green" : check.ok === false ? "text-red" : "text-yellow")}>{check.ok === true ? '合格' : check.ok === false ? '不满足' : '待补充'}</td>
+                </tr>
+              )) : (
+                <tr><td colSpan={5} className="py-4 text-center text-text3 border-b border-border2/50">当前设计路径无额外专项校核项</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <SLabel className="mb-3">施工温度与工艺控制</SLabel>
+        <div className="bg-surface2 border border-border rounded-lg overflow-hidden mb-5">
+          {constructionGuidance.length ? constructionGuidance.map(item => (
+            <React.Fragment key={item.id}>
+              <Row k={item.label} v={item.message} />
+            </React.Fragment>
+          )) : (
+            <Row k="施工建议" v="当前材料体系无额外知识库施工建议，按项目规范和现场试拌结果控制。" />
+          )}
+          <Row k="RAP 参数" v={`掺量 ${specialtyParams.rap.content}% / 含水率 ${specialtyParams.rap.moisture}% / 最大粒径 ${specialtyParams.rap.maxParticleSize}mm`} />
         </div>
 
         <SLabel className="mb-3">合成级配</SLabel>

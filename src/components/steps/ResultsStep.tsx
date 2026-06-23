@@ -1,12 +1,12 @@
 import React from 'react';
-import { Card, SLabel, Button } from '../ui';
+import { Card, SLabel, Button, InfoBox } from '../ui';
 import { useMixDesign } from '../../store/MixDesignContext';
 import { cn } from '../../lib/utils';
 import { LineChart, Line, XAxis, YAxis, ReferenceLine, ResponsiveContainer } from 'recharts';
 import { AlertTriangle, CheckCircle2, FileWarning } from 'lucide-react';
 
 export function ResultsStep() {
-  const { oacResult, marshallData, basicInfo, setStep, markStepDone, inputAudit } = useMixDesign();
+  const { oacResult, marshallData, basicInfo, setStep, markStepDone, inputAudit, specialtyChecks, constructionGuidance } = useMixDesign();
 
   if (!oacResult) {
     return (
@@ -21,6 +21,7 @@ export function ResultsStep() {
     );
   }
 
+  const isMarshallResult = (oacResult.method ?? 'marshall') === 'marshall';
   const cards = [
     { lbl: '最佳油石比 OAC', val: oacResult.oac.toFixed(2), unit: '%', chk: null },
     ...oacResult.checks.map(c => ({
@@ -34,7 +35,7 @@ export function ResultsStep() {
     { lbl: '混合料类型', val: basicInfo.mixType, unit: '', chk: null },
   ];
 
-  const xs = marshallData.map(d => d.oac);
+  const xs = marshallData.map(d => d.oac).filter(Boolean);
   const xMin = Math.min(...xs);
   const xMax = Math.max(...xs);
 
@@ -83,12 +84,13 @@ export function ResultsStep() {
         </div>
       </div>
 
-      <Card title="最佳油石比推导（OAC1 / OAC2）">
+      <Card title={isMarshallResult ? '最佳油石比推导（OAC1 / OAC2）' : '专项设计路径结果'}>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-4">
-          <LedgerTile label="OAC1 四参数均值" value={`${oacResult.oac1.toFixed(3)}%`} />
-          <LedgerTile label="OAC2 共同区间中值" value={oacResult.oac2 === null ? '无共同区间' : `${oacResult.oac2.toFixed(3)}%`} tone={oacResult.oac2 === null ? 'bad' : 'default'} />
+          <LedgerTile label="设计方法" value={basicInfo.designMethod} />
+          <LedgerTile label={isMarshallResult ? 'OAC2 共同区间中值' : '知识库依据'} value={isMarshallResult ? (oacResult.oac2 === null ? '无共同区间' : `${oacResult.oac2.toFixed(3)}%`) : (oacResult.sourceId ?? '专项规则')} tone={isMarshallResult && oacResult.oac2 === null ? 'bad' : 'default'} />
           <LedgerTile label="最终 OAC" value={`${oacResult.oac.toFixed(3)}%`} tone="highlight" />
         </div>
+        {isMarshallResult ? (
         <div className="bg-surface2 border border-border rounded-lg overflow-hidden">
           <div className="flex justify-between items-center px-5 py-2.5 border-b border-border2/50 text-[13px]">
             <span className="font-mono text-[11px] text-text2">a1 最大密度对应油石比</span>
@@ -121,10 +123,48 @@ export function ResultsStep() {
             <span className="font-mono font-bold text-amber text-lg">{oacResult.oac.toFixed(3)} %</span>
           </div>
         </div>
+        ) : (
+          <InfoBox>
+            {basicInfo.designMethod === 'superpave'
+              ? 'Superpave 路径以 Ndes 转数下空隙率 4% 对应沥青含量作为 OAC，并校核 Nmax 压密度。'
+              : '专利直算路径使用当前道路等级 VV/VFA 控制值直接推导 OAC，报告中应保留试验复核说明。'}
+          </InfoBox>
+        )}
         {oacResult.warnings.length ? (
           <div className="mt-3 text-yellow font-mono text-xs flex items-start gap-2"><AlertTriangle className="w-4 h-4 shrink-0" /> {oacResult.warnings.join(' | ')}</div>
         ) : null}
       </Card>
+
+      {specialtyChecks.length ? (
+        <Card title="专项校核">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {specialtyChecks.map(check => (
+              <div key={check.id} className={cn("rounded-sm border px-4 py-3 bg-app-bg", check.ok === true ? "border-green/25" : check.ok === false ? "border-red/25" : "border-yellow/25")}>
+                <div className="flex items-center gap-2 text-[10px] text-text3 font-mono tracking-widest uppercase">
+                  {check.ok === true ? <CheckCircle2 className="w-3.5 h-3.5 text-green" /> : <AlertTriangle className="w-3.5 h-3.5 text-yellow" />}
+                  {check.label}
+                </div>
+                <div className="mt-2 font-mono text-[15px] font-bold text-text1">{check.value}</div>
+                <div className="mt-1 text-[10px] font-mono text-text3">{check.requirement} · {check.sourceId}</div>
+                <div className="mt-2 text-[11px] text-text3 leading-relaxed">{check.message}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
+
+      {constructionGuidance.length ? (
+        <Card title="施工控制建议">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {constructionGuidance.slice(0, 4).map(item => (
+              <div key={item.id} className="rounded-sm border border-border bg-app-bg px-4 py-3">
+                <div className="font-mono text-[10px] text-text3 tracking-widest uppercase">{item.label}</div>
+                <div className="mt-1 text-[12px] text-text1 leading-relaxed">{item.message}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+      ) : null}
 
       <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-4 mb-6">
         {cards.map((c, i) => (
@@ -150,6 +190,7 @@ export function ResultsStep() {
         ))}
       </div>
 
+      {isMarshallResult && (
       <Card 
         title="马歇尔指标曲线（4面板）"
         headerRight={
@@ -167,6 +208,7 @@ export function ResultsStep() {
           <MiniChart dataKey="vfa" title="VFA 沥青饱和度 (%)" color="#9B7FFF" />
         </div>
       </Card>
+      )}
 
       <div className="flex justify-between mt-6 pb-2">
         <Button variant="ghost" onClick={() => setStep(4)}>← 返回</Button>

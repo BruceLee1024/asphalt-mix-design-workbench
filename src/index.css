@@ -857,7 +857,7 @@ html {
   font-weight: 700;
   color: var(--ac-white);
   text-decoration: none;
-  letter-spacing: -0.5px;
+  letter-spacing: 0;
 }
 
 .acmix-page .nav-logo em,
@@ -916,7 +916,7 @@ html {
   align-items: center;
   overflow: hidden;
   background: #05050A;
-  padding: 0;
+  padding: 116px 0 128px;
 }
 
 .acmix-page #hero-canvas {
@@ -966,13 +966,17 @@ html {
   position: relative;
   z-index: 5;
   width: 100%;
-  max-width: 1200px;
+  max-width: 1400px;
   padding: 0 6vw;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.68fr);
+  gap: clamp(48px, 8vw, 112px);
   align-items: center;
-  text-align: center;
-  margin-top: -40px;
+  text-align: left;
+}
+
+.acmix-page .hero-copy {
+  max-width: 720px;
 }
 
 .acmix-page .hero-eyebrow {
@@ -988,7 +992,7 @@ html {
   border: 1px solid rgba(232,147,26,0.25);
   padding: 7px 20px;
   border-radius: 100px;
-  margin-bottom: 40px;
+  margin-bottom: 30px;
   backdrop-filter: blur(8px);
   animation: acFadeUp 0.8s var(--ease-out) 0.2s both;
 }
@@ -1003,17 +1007,26 @@ html {
 }
 
 .acmix-page .hero-headline {
-  font-size: clamp(52px, 9.5vw, 130px);
+  font-size: clamp(52px, 6.7vw, 104px);
   font-weight: 700;
-  line-height: 0.92;
-  letter-spacing: -4px;
+  line-height: 0.98;
+  letter-spacing: 0;
   color: var(--ac-white);
   animation: acFadeUp 0.9s var(--ease-out) 0.35s both;
 }
 
+.acmix-page .hero-headline span,
+.acmix-page .hero-headline em {
+  display: block;
+}
+
+.acmix-page .hero-headline span {
+  text-shadow: 0 18px 70px rgba(0, 0, 0, 0.38);
+}
+
 .acmix-page .hero-headline em {
   font-style: normal;
-  display: block;
+  margin-top: 4px;
   background: linear-gradient(100deg, #7A4500 0%, #C87010 20%, #F5A623 35%, #FFD980 50%, #F5A623 65%, #C87010 80%, #7A4500 100%);
   background-size: 200% auto;
   -webkit-background-clip: text;
@@ -1022,21 +1035,30 @@ html {
   animation: acShimmer 4s linear infinite;
 }
 
-.acmix-page .hero-rule {
-  width: 1px;
-  height: 60px;
-  background: linear-gradient(to bottom, transparent, rgba(232,147,26,0.5), transparent);
-  margin: 36px auto;
-  animation: acFadeUp 0.7s var(--ease-out) 0.6s both;
+.acmix-page .hero-headline small {
+  display: inline-flex;
+  align-items: center;
+  min-height: 46px;
+  margin-top: 22px;
+  padding: 0 18px;
+  border-left: 3px solid var(--ac-amber);
+  background: linear-gradient(90deg, rgba(232, 147, 26, 0.14), transparent);
+  color: var(--ac-light);
+  font-family: var(--mono);
+  font-size: clamp(18px, 2vw, 30px);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  line-height: 1;
 }
 
 .acmix-page .hero-desc {
   font-size: clamp(15px, 1.5vw, 18px);
   color: var(--ac-stone2);
   line-height: 1.75;
-  max-width: 620px;
+  max-width: 660px;
   font-weight: 300;
   letter-spacing: 0.2px;
+  margin-top: 26px;
   animation: acFadeUp 0.8s var(--ease-out) 0.7s both;
 }
 
@@ -1045,13 +1067,207 @@ html {
   font-weight: 500;
 }
 
+.acmix-page .hero-proof-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 24px;
+  animation: acFadeUp 0.8s var(--ease-out) 0.78s both;
+}
+
+.acmix-page .hero-proof-row span {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid rgba(245, 184, 74, 0.18);
+  border-radius: 6px;
+  background: rgba(10, 10, 13, 0.42);
+  color: var(--ac-light);
+  font-size: 12px;
+}
+
+.acmix-page .hero-proof-row svg {
+  width: 15px;
+  height: 15px;
+  color: var(--ac-green);
+  stroke-width: 2;
+}
+
 .acmix-page .hero-cta-group {
   display: flex;
   gap: 14px;
   flex-wrap: wrap;
-  justify-content: center;
-  margin-top: 40px;
+  justify-content: flex-start;
+  margin-top: 32px;
   animation: acFadeUp 0.8s var(--ease-out) 0.85s both;
+}
+
+.acmix-page .hero-workbench {
+  position: relative;
+  width: min(100%, 500px);
+  justify-self: end;
+  border: 1px solid rgba(245, 184, 74, 0.22);
+  border-radius: 8px;
+  background:
+    linear-gradient(140deg, rgba(232, 147, 26, 0.14), transparent 38%),
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    rgba(18, 18, 24, 0.78);
+  background-size: auto, 38px 38px, 38px 38px, auto;
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(18px);
+  overflow: hidden;
+  animation: acFadeUp 0.8s var(--ease-out) 0.95s both;
+}
+
+.acmix-page .hero-workbench::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  transform: translateX(-120%);
+  animation: acWorkbenchSheen 5.6s ease-in-out 1.8s infinite;
+  pointer-events: none;
+}
+
+.acmix-page .hero-workbench-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 24px;
+  border-bottom: 1px solid rgba(58, 58, 76, 0.82);
+}
+
+.acmix-page .hero-workbench-head span,
+.acmix-page .hero-workbench-grid span {
+  display: block;
+  color: var(--ac-stone);
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+.acmix-page .hero-workbench-head strong {
+  display: block;
+  margin-top: 8px;
+  color: var(--ac-white);
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.acmix-page .hero-workbench-head em {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid rgba(46, 204, 113, 0.26);
+  border-radius: 4px;
+  background: rgba(46, 204, 113, 0.1);
+  color: var(--ac-green);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.acmix-page .hero-workbench-chart {
+  position: relative;
+  height: 190px;
+  margin: 20px 24px;
+  border: 1px solid rgba(58, 58, 76, 0.9);
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    rgba(10, 10, 13, 0.62);
+  background-size: 100% 42px, 20% 100%, auto;
+  overflow: hidden;
+}
+
+.acmix-page .hero-spec-band {
+  position: absolute;
+  inset: 28% 9% 20%;
+  clip-path: polygon(0 74%, 18% 62%, 36% 52%, 55% 40%, 76% 26%, 100% 16%, 100% 45%, 76% 58%, 55% 70%, 36% 82%, 18% 90%, 0 96%);
+  background: linear-gradient(90deg, rgba(232, 147, 26, 0.1), rgba(232, 147, 26, 0.32));
+}
+
+.acmix-page .hero-chart-line {
+  position: absolute;
+  inset: 0;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+  transform-origin: left center;
+}
+
+.acmix-page .hero-chart-line-main {
+  background-image: url("data:image/svg+xml,%3Csvg width='520' height='210' viewBox='0 0 520 210' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M42 162 C96 138 142 122 190 108 C246 91 294 78 354 55 C416 31 452 28 482 22' stroke='%23F5A623' stroke-width='4' stroke-linecap='round'/%3E%3Ccircle cx='190' cy='108' r='5' fill='%23F5A623'/%3E%3Ccircle cx='354' cy='55' r='5' fill='%23F5A623'/%3E%3C/svg%3E");
+  filter: drop-shadow(0 0 12px rgba(245, 166, 35, 0.55));
+}
+
+.acmix-page .hero-chart-line-ghost {
+  background-image: url("data:image/svg+xml,%3Csvg width='520' height='210' viewBox='0 0 520 210' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M42 176 C90 150 142 136 194 121 C254 102 303 89 360 68 C416 50 454 43 482 38' stroke='%236B7FA3' stroke-width='3' stroke-dasharray='8 8' stroke-linecap='round'/%3E%3C/svg%3E");
+  opacity: 0.72;
+}
+
+.acmix-page .hero-workbench-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  margin: 0 24px 20px;
+  border: 1px solid rgba(58, 58, 76, 0.82);
+  border-radius: 8px;
+  background: rgba(58, 58, 76, 0.82);
+  overflow: hidden;
+}
+
+.acmix-page .hero-workbench-grid div {
+  min-height: 96px;
+  padding: 16px 14px;
+  background: rgba(10, 10, 13, 0.68);
+}
+
+.acmix-page .hero-workbench-grid strong {
+  display: block;
+  margin-top: 12px;
+  color: var(--ac-amber2);
+  font-family: var(--mono);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.acmix-page .hero-workbench-grid em {
+  display: block;
+  margin-top: 10px;
+  color: var(--ac-stone);
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.5;
+}
+
+.acmix-page .hero-workbench-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px 24px 20px;
+  border-top: 1px solid rgba(58, 58, 76, 0.82);
+}
+
+.acmix-page .hero-workbench-foot span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ac-stone2);
+  font-size: 12px;
+}
+
+.acmix-page .hero-workbench-foot svg {
+  width: 15px;
+  height: 15px;
+  color: var(--ac-amber2);
+  stroke-width: 1.9;
 }
 
 .acmix-page .btn-cta {
@@ -1240,7 +1456,7 @@ html {
 .acmix-page .sec-title {
   font-size: clamp(32px, 4vw, 56px);
   font-weight: 700;
-  letter-spacing: -1.5px;
+  letter-spacing: 0;
   line-height: 1.05;
   color: var(--ac-white);
   margin-bottom: 20px;
@@ -1567,7 +1783,7 @@ html {
 .acmix-page .feature-title {
   font-size: 28px;
   font-weight: 700;
-  letter-spacing: -0.5px;
+  letter-spacing: 0;
   color: var(--ac-white);
   margin-bottom: 16px;
 }
@@ -1595,16 +1811,23 @@ html {
 }
 
 .acmix-page .feat-icon {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--ac-amberDim);
   border-radius: 4px;
-  font-size: 13px;
+  border: 1px solid rgba(245, 184, 74, 0.18);
   margin-top: 1px;
+  color: var(--ac-amber2);
+}
+
+.acmix-page .feat-icon svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.9;
 }
 
 .acmix-page .feat-text h4 {
@@ -1891,7 +2114,7 @@ html {
   line-height: 1.2;
   color: var(--ac-white);
   margin-bottom: 24px;
-  letter-spacing: -0.5px;
+  letter-spacing: 0;
 }
 
 .acmix-page .cta-big em {
@@ -1988,7 +2211,51 @@ html {
   100% { transform: translateX(-50%); }
 }
 
+@keyframes acWorkbenchSheen {
+  0%, 45% { transform: translateX(-120%); }
+  78%, 100% { transform: translateX(120%); }
+}
+
 @media (max-width: 900px) {
+  .acmix-hero {
+    min-height: auto;
+    padding: 112px 0 0;
+  }
+
+  .acmix-page .hero-content {
+    grid-template-columns: 1fr;
+    gap: 40px;
+    text-align: center;
+  }
+
+  .acmix-page .hero-copy {
+    max-width: 760px;
+    margin: 0 auto;
+  }
+
+  .acmix-page .hero-desc {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .acmix-page .hero-proof-row,
+  .acmix-page .hero-cta-group {
+    justify-content: center;
+  }
+
+  .acmix-page .hero-workbench {
+    justify-self: center;
+  }
+
+  .acmix-page .hero-headline small {
+    justify-content: center;
+    margin-left: auto;
+    margin-right: auto;
+    border-left: 0;
+    border-top: 2px solid var(--ac-amber);
+    background: linear-gradient(180deg, rgba(232, 147, 26, 0.14), transparent);
+  }
+
   .acmix-page .process-head {
     grid-template-columns: 1fr;
     gap: 32px;
@@ -2072,7 +2339,8 @@ html {
     position: relative;
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    margin-top: auto;
+    width: 100%;
+    margin-top: 64px;
   }
 
   .acmix-page .hds-canvas-wrap {
@@ -2135,18 +2403,68 @@ html {
   }
 
   .acmix-page .hero-content {
-    padding: 96px 5vw 64px;
+    padding: 0 5vw;
     margin-top: 0;
   }
 
   .acmix-page .hero-headline {
-    letter-spacing: -2px;
+    letter-spacing: 0;
+  }
+
+  .acmix-page .hero-headline small {
+    min-height: 40px;
+    margin-top: 16px;
+    padding: 0 12px;
+    font-size: 16px;
+    letter-spacing: 0.12em;
   }
 
   .acmix-page .hero-eyebrow {
     font-size: 9px;
     letter-spacing: 2px;
     line-height: 1.6;
+  }
+
+  .acmix-page .hero-desc {
+    margin-top: 22px;
+  }
+
+  .acmix-page .hero-proof-row span {
+    flex: 1 1 140px;
+    justify-content: center;
+  }
+
+  .acmix-page .hero-cta-group {
+    width: 100%;
+  }
+
+  .acmix-page .btn-cta {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  .acmix-page .hero-workbench-head,
+  .acmix-page .hero-workbench-foot {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .acmix-page .hero-workbench-chart {
+    height: 180px;
+    margin: 18px;
+  }
+
+  .acmix-page .hero-workbench-grid {
+    grid-template-columns: repeat(2, 1fr);
+    margin: 0 18px 18px;
+  }
+
+  .acmix-page .hero-workbench-grid div {
+    min-height: 96px;
+  }
+
+  .acmix-page .hero-workbench-foot {
+    flex-direction: column;
   }
 
   .acmix-page .hero-datastrip,
