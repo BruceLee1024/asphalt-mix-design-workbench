@@ -5,9 +5,11 @@ import {defineConfig} from 'vite';
 
 export default defineConfig(() => {
   const isProduction = process.env.NODE_ENV === 'production';
+  const isVercel = process.env.VERCEL === '1';
 
   return {
-    base: isProduction ? '/asphalt-mix-design-workbench/' : '/',
+    // GitHub Pages is served from the repository path; Vercel custom domains use root paths.
+    base: isVercel ? '/' : isProduction ? '/asphalt-mix-design-workbench/' : '/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
