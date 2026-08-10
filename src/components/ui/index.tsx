@@ -81,7 +81,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         className={cn(
-          "inline-flex items-center justify-center gap-2 rounded-sm font-mono font-bold tracking-wide cursor-pointer transition-all whitespace-nowrap border border-transparent",
+          "inline-flex items-center justify-center gap-2 rounded-sm font-mono font-bold tracking-wide cursor-pointer transition-all whitespace-nowrap border border-transparent disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:translate-y-0 disabled:hover:shadow-none",
           size === 'default' ? "px-6 py-2.5 text-xs" : "px-3.5 py-1.5 text-[11px]",
           variant === 'primary' && "bg-amber text-black hover:bg-amber2 hover:shadow-[0_4px_24px_rgba(245,166,35,0.45)] hover:-translate-y-[1px]",
           variant === 'ghost' && "bg-transparent text-text2 border-border hover:text-text1 hover:border-border2 hover:bg-surface2",

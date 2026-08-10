@@ -1,4 +1,4 @@
-import type { BasicInfo, BlendDesign, MarshallPoint, MarshallSpec, OacResult, PerformanceCheck, MaterialSource } from '../types';
+import type { BasicInfo, BlendDesign, MarshallPoint, MarshallSpec, OacResult, PerformanceCheck, MaterialSource, SpecialtyCheck, SpecialtyParameters } from '../types';
 
 export function interp(xs: number[], ys: number[], x: number): number {
   if (xs.length === 0 || ys.length === 0) return 0;
@@ -44,18 +44,19 @@ export function interpTarget(xs: number[], ys: number[], target: number): number
   return null;
 }
 
-export function calculateBlendGradation(materials: MaterialSource[]): BlendDesign {
-  const total = materials.reduce((sum, m) => sum + Math.max(0, m.proportion || 0), 0);
-  const sieveCount = materials[0]?.passRates.length ?? 0;
+export function calculateBlendGradation(materials: MaterialSource[], rap?: SpecialtyParameters['rap']): BlendDesign {
+  const sources = blendSources(materials, rap);
+  const total = sources.reduce((sum, m) => sum + Math.max(0, m.proportion || 0), 0);
+  const sieveCount = sources[0]?.passRates.length ?? materials[0]?.passRates.length ?? 0;
   const passRates = Array.from({ length: sieveCount }, (_, i) => {
     if (!total) return 0;
-    const value = materials.reduce((sum, m) => sum + (m.passRates[i] ?? 0) * Math.max(0, m.proportion || 0), 0) / total;
+    const value = sources.reduce((sum, m) => sum + (m.passRates[i] ?? 0) * Math.max(0, m.proportion || 0), 0) / total;
     return round(value, 1);
   });
 
   const warnings: string[] = [];
   if (Math.abs(total - 100) > 0.2) warnings.push(`材料比例合计为 ${round(total, 1)}%，建议调整为 100%。`);
-  materials.forEach(m => {
+  sources.forEach(m => {
     if (m.passRates.length !== sieveCount) warnings.push(`${m.name} 的筛孔数据不完整。`);
   });
 
@@ -82,14 +83,18 @@ export function validateGradation(
   return warnings;
 }
 
-export function fitBlendToMidpoint(materials: MaterialSource[], spec: { lo: readonly number[]; hi: readonly number[] }): MaterialSource[] {
+export function fitBlendToMidpoint(materials: MaterialSource[], spec: { lo: readonly number[]; hi: readonly number[]; sieves?: readonly number[] }, rap?: SpecialtyParameters['rap']): MaterialSource[] {
   if (materials.length === 0) return materials;
-  const mids = spec.lo.map((lo, i) => (lo + spec.hi[i]) / 2);
-  let props = materials.map(m => Math.max(0, m.proportion || 0));
-  props = normalizeProps(props);
+  const editableIndexes = materials.map((m, index) => m.type !== 'rap' || !rap?.enabled ? index : -1).filter(index => index >= 0);
+  if (!editableIndexes.length) return materials;
+  const editable = editableIndexes.map(index => materials[index]);
+  const fixed = rapBlendSources(rap);
+  const target = productionTargets(spec);
+  const editableTotal = Math.max(0, 100 - fixed.reduce((sum, item) => sum + item.proportion, 0));
+  let props = normalizeProps(editable.map(m => Math.max(0, m.proportion || 0)), editableTotal);
 
   let step = 12;
-  let bestScore = blendScore(materials, props, mids);
+  let bestScore = blendScore([...editable, ...fixed], [...props, ...fixed.map(item => item.proportion)], target);
   for (let pass = 0; pass < 80; pass++) {
     let improved = false;
     for (let i = 0; i < props.length; i++) {
@@ -98,7 +103,7 @@ export function fitBlendToMidpoint(materials: MaterialSource[], spec: { lo: read
         const next = [...props];
         next[i] += step;
         next[j] -= step;
-        const score = blendScore(materials, next, mids);
+        const score = blendScore([...editable, ...fixed], [...next, ...fixed.map(item => item.proportion)], target);
         if (score < bestScore) {
           props = next;
           bestScore = score;
@@ -110,8 +115,17 @@ export function fitBlendToMidpoint(materials: MaterialSource[], spec: { lo: read
     if (step < 0.05) break;
   }
 
-  props = normalizeProps(props);
-  return materials.map((m, i) => ({ ...m, proportion: round(props[i], 1) }));
+  props = normalizeProps(props, editableTotal);
+  return materials.map((material, index) => {
+    const editableIndex = editableIndexes.indexOf(index);
+    return editableIndex < 0 ? material : { ...material, proportion: round(props[editableIndex], 1) };
+  });
+}
+
+export function calculateBinderBalance(oac: number, rap: SpecialtyParameters['rap']) {
+  const recycledAsphalt = rap.enabled ? round(rap.content * rap.asphaltContent / 100, 3) : 0;
+  const virginAsphalt = round(oac - recycledAsphalt, 3);
+  return { targetOac: round(oac, 3), recycledAsphalt, virginAsphalt, ok: virginAsphalt >= 0 };
 }
 
 export function calculateVolumetrics(point: MarshallPoint, basicInfo: Pick<BasicInfo, 'gammaSb'>): MarshallPoint {
@@ -173,6 +187,8 @@ export function calculateOacAnalysis(points: MarshallPoint[], spec: MarshallSpec
   const checks = buildPerformanceChecks(finalPoint, spec);
 
   return {
+    method: 'marshall',
+    sourceId: 'marshall-oac-common-range',
     oac: round(oac, 3),
     oac1: round(oac1, 3),
     oac2,
@@ -191,6 +207,140 @@ export function calculateOacAnalysis(points: MarshallPoint[], spec: MarshallSpec
     checks,
     warnings,
   };
+}
+
+export function calculatePatentOac(vv1: number, vfa1: number, vv2: number, vfa2: number): OacResult | null {
+  if (vv1 <= 0.4 || vv2 <= 0.4 || !vfa1 || !vfa2) return null;
+  const oac2 = 2.52 / (vv2 - 0.4) + 7.85e-4 * vfa2 ** 2 - 0.066 * vfa2 + 4.89;
+  const oac = 1.96e-4 * vfa1 ** 2 - 0.0165 * vfa1 + 0.63 / (vv1 - 0.4) + 2.42 + oac2 / 2;
+  const warnings: string[] = [];
+  if (vv1 < 3 || vv1 > 6 || vv2 < 3 || vv2 > 6) warnings.push('专利 OAC 直算输入 VV 超出常用目标范围，需复核适用性。');
+  if (vfa1 < 60 || vfa1 > 80 || vfa2 < 60 || vfa2 > 80) warnings.push('专利 OAC 直算输入 VFA 超出常用目标范围，需复核适用性。');
+
+  return {
+    method: 'patent-oac',
+    sourceId: 'patent-modified-asphalt-oac',
+    oac: round(oac, 3),
+    oac1: round(oac, 3),
+    oac2: round(oac2, 3),
+    oacMin: null,
+    oacMax: null,
+    a1: 0,
+    a2: 0,
+    a3: 0,
+    a4: null,
+    den: 0,
+    ms: 0,
+    fl: 0,
+    vv: round(vv1, 1),
+    vma: 0,
+    vfa: round(vfa1, 1),
+    checks: [],
+    warnings,
+  };
+}
+
+export function calculateSuperpaveResult(params: SpecialtyParameters['superpave']): OacResult | null {
+  if (!params.asphaltContentAtNdes || !params.gmmAtNdes) return null;
+  const warnings: string[] = [];
+  if (Math.abs(params.gmmAtNdes - 96) > 0.5) warnings.push('Ndes 压实度未接近 96%Gmm（空隙率 4%），应通过试验插值修正最佳沥青用量。');
+  if (params.gmmAtNmax >= 98) warnings.push('Nmax 压实度不小于 98%Gmm，存在后期压密、车辙或泛油风险。');
+  return {
+    method: 'superpave',
+    sourceId: 'superpave-sgc-4vv',
+    oac: round(params.asphaltContentAtNdes, 3),
+    oac1: round(params.asphaltContentAtNdes, 3),
+    oac2: null,
+    oacMin: null,
+    oacMax: null,
+    a1: params.nini,
+    a2: params.ndes,
+    a3: params.nmax,
+    a4: null,
+    den: 0,
+    ms: 0,
+    fl: 0,
+    vv: round(100 - params.gmmAtNdes, 1),
+    vma: 0,
+    vfa: 0,
+    checks: [],
+    warnings,
+  };
+}
+
+export function buildSpecialtyChecks(basicInfo: Pick<BasicInfo, 'mixType' | 'designMethod'>, params: SpecialtyParameters): SpecialtyCheck[] {
+  const checks: SpecialtyCheck[] = [];
+
+  if (basicInfo.mixType === 'SMA-13') {
+    checks.push({
+      id: 'sma-vma',
+      label: 'SMA VMA',
+      value: params.sma.vma ? `${params.sma.vma}%` : '待录入',
+      requirement: 'VMA >= 18%',
+      ok: params.sma.vma > 0 ? params.sma.vma >= 18 : null,
+      sourceId: 'term-vma',
+      message: 'SMA 应满足足够矿料间隙率以容纳玛蹄脂并保证耐久性。',
+      severity: 'blocking',
+    });
+    checks.push({
+      id: 'sma-vca',
+      label: 'SMA 粗集料骨架间隙率',
+      value: params.sma.vcadrc && params.sma.vcamix ? `${params.sma.vcamix}% / ${params.sma.vcadrc}%` : '待录入',
+      requirement: 'VCAmix <= VCADRC',
+      ok: params.sma.vcadrc > 0 && params.sma.vcamix > 0 ? params.sma.vcamix <= params.sma.vcadrc : null,
+      sourceId: 'term-vca',
+      message: 'VCAmix 不大于 VCADRC 时，粗集料骨架嵌挤结构判定为有效。',
+      severity: 'blocking',
+    });
+  }
+
+  if (params.rap.enabled || basicInfo.mixType === 'RAP-AC-20') {
+    checks.push({
+      id: 'rap-moisture',
+      label: 'RAP 含水率',
+      value: `${params.rap.moisture}%`,
+      requirement: '<= 3%',
+      ok: params.rap.moisture > 0 ? params.rap.moisture <= 3 : null,
+      sourceId: 'mat-rap',
+      message: 'RAP 含水率超限会造成加热能耗升高、拌和不均和水稳定风险。',
+      severity: 'blocking',
+    });
+    checks.push({
+      id: 'rap-max-size',
+      label: 'RAP 最大颗粒粒径',
+      value: `${params.rap.maxParticleSize}mm`,
+      requirement: '<= 26.5mm',
+      ok: params.rap.maxParticleSize > 0 ? params.rap.maxParticleSize <= 26.5 : null,
+      sourceId: 'mat-rap',
+      message: 'RAP 最大颗粒粒径宜不大于 26.5mm，超限时应破碎筛分或调整再生料处理工艺。',
+      severity: 'blocking',
+    });
+  }
+
+  if (basicInfo.designMethod === 'superpave') {
+    checks.push({
+      id: 'superpave-ndes',
+      label: 'Ndes 空隙率',
+      value: params.superpave.gmmAtNdes ? `${round(100 - params.superpave.gmmAtNdes, 1)}%` : '待录入',
+      requirement: 'VV = 4%',
+      ok: params.superpave.gmmAtNdes > 0 ? Math.abs(params.superpave.gmmAtNdes - 96) <= 0.5 : null,
+      sourceId: 'superpave-sgc-4vv',
+      message: 'Superpave 以 Ndes 转数下空隙率 4% 对应沥青含量作为设计沥青用量。',
+      severity: 'blocking',
+    });
+    checks.push({
+      id: 'superpave-nmax',
+      label: 'Nmax 压密度',
+      value: params.superpave.gmmAtNmax ? `${params.superpave.gmmAtNmax}%Gmm` : '待录入',
+      requirement: '< 98%Gmm',
+      ok: params.superpave.gmmAtNmax > 0 ? params.superpave.gmmAtNmax < 98 : null,
+      sourceId: 'superpave-sgc-nmax',
+      message: 'Nmax 压密度应小于 98%Gmm，以降低后期车辙和泛油风险。',
+      severity: 'blocking',
+    });
+  }
+
+  return checks;
 }
 
 export function buildPerformanceChecks(point: Pick<MarshallPoint, 'ms' | 'fl' | 'vv' | 'vma' | 'vfa'>, spec: MarshallSpec): PerformanceCheck[] {
@@ -241,19 +391,48 @@ export function round(value: number, digits: number): number {
   return Math.round((value + Number.EPSILON) * m) / m;
 }
 
-function normalizeProps(props: number[]): number[] {
+function normalizeProps(props: number[], target = 100): number[] {
   const total = props.reduce((sum, p) => sum + Math.max(0, p), 0);
-  if (!total) return props.map((_, i) => (i === 0 ? 100 : 0));
-  const normalized = props.map(p => Math.max(0, p) / total * 100);
-  const drift = 100 - normalized.reduce((sum, p) => sum + p, 0);
+  if (!total) return props.map((_, i) => (i === 0 ? target : 0));
+  const normalized = props.map(p => Math.max(0, p) / total * target);
+  const drift = target - normalized.reduce((sum, p) => sum + p, 0);
   normalized[normalized.length - 1] += drift;
   return normalized;
 }
 
-function blendScore(materials: MaterialSource[], props: number[], target: number[]): number {
+function blendScore(materials: Array<Pick<MaterialSource, 'passRates'>>, props: number[], target: number[]): number {
   const total = props.reduce((sum, p) => sum + p, 0) || 1;
   return target.reduce((sum, t, i) => {
     const v = materials.reduce((s, m, mi) => s + (m.passRates[i] ?? 0) * props[mi], 0) / total;
     return sum + (v - t) ** 2;
   }, 0);
+}
+
+function blendSources(materials: MaterialSource[], rap?: SpecialtyParameters['rap']): Array<Pick<MaterialSource, 'name' | 'proportion' | 'passRates'>> {
+  const native = rap?.enabled ? materials.filter(material => material.type !== 'rap') : materials;
+  return [...native, ...rapBlendSources(rap)];
+}
+
+function rapBlendSources(rap?: SpecialtyParameters['rap']): Array<Pick<MaterialSource, 'name' | 'proportion' | 'passRates'>> {
+  if (!rap?.enabled || rap.content <= 0) return [];
+  const fractions = rap.fractions?.length ? rap.fractions : [];
+  if (!fractions.length) return [];
+  return fractions.map(fraction => ({
+    name: `RAP ${fraction.label}`,
+    proportion: rap.content * Math.max(0, fraction.yield) / 100,
+    passRates: fraction.passRates,
+  }));
+}
+
+function productionTargets(spec: { lo: readonly number[]; hi: readonly number[]; sieves?: readonly number[] }) {
+  return spec.lo.map((lo, index) => {
+    const hi = spec.hi[index];
+    const mid = (lo + hi) / 2;
+    const sieve = spec.sieves?.[index];
+    if (sieve === 9.5) return (mid + hi) / 2;
+    if (sieve === 4.75) return mid;
+    if (sieve === 2.36) return mid + (hi - mid) * 0.2;
+    if (sieve !== undefined && sieve < 2.36) return (lo + mid) / 2;
+    return mid;
+  });
 }

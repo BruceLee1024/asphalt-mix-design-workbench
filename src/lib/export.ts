@@ -1,5 +1,7 @@
 import ExcelJS from 'exceljs';
-import type { AsphaltQualityRecord, BasicInfo, MaterialSource, MarshallGroup, MarshallPoint, OacResult, PerformanceCheck, PerformanceTestRecord, ProjectLedger, ReviewIssue, StandardProfile } from '../types';
+import type { AsphaltQualityRecord, BasicInfo, MaterialSource, MarshallGroup, MarshallPoint, OacResult, PerformanceCheck, PerformanceTestRecord, ProjectLedger, ReviewIssue, SpecialtyCheck, SpecialtyParameters, StandardProfile } from '../types';
+import type { ConstructionKnowledgeRecord } from './knowledge/types';
+import { calculateBinderBalance } from './math';
 
 export interface ExportState {
   basicInfo: BasicInfo;
@@ -15,9 +17,14 @@ export interface ExportState {
   checks: PerformanceCheck[];
   performanceRecords: PerformanceTestRecord[];
   reviewIssues: ReviewIssue[];
+  specialtyParams: SpecialtyParameters;
+  specialtyChecks: SpecialtyCheck[];
+  constructionGuidance: ConstructionKnowledgeRecord[];
+  knowledgeVersion: string;
 }
 
 export function exportDesignWorkbook(state: ExportState): string {
+  const binderBalance = state.oacResult ? calculateBinderBalance(state.oacResult.oac, state.specialtyParams.rap) : null;
   const sections = [
     csvSection('基本信息', [
       ['工程编号', state.projectLedger.projectCode],
@@ -34,6 +41,12 @@ export function exportDesignWorkbook(state: ExportState): string {
       ['报告编号', state.projectLedger.reportCode],
       ['混合料类型', state.basicInfo.mixType],
       ['规范版本', state.standard.label],
+      ['知识库版本', state.knowledgeVersion],
+      ['工程类型', state.basicInfo.projectDomain],
+      ['设计方法', state.basicInfo.designMethod],
+      ['交通等级', state.basicInfo.trafficLevel],
+      ['设计ESALs', state.basicInfo.esals],
+      ['材料体系', state.basicInfo.materialSystem],
       ['沥青标号', state.basicInfo.asphaltGrade],
       ['沥青密度', state.basicInfo.denB],
     ]),
@@ -46,8 +59,8 @@ export function exportDesignWorkbook(state: ExportState): string {
       ['延度', state.asphaltQuality.ductility],
     ]),
     csvSection('原材料', [
-      ['材料', '类型', '比例(%)', '毛体积密度', '表观密度', '吸水率(%)', '产地/料场', '规格', '批次', '检测报告号'],
-      ...state.materials.map(m => [m.name, m.type, m.proportion, m.gammaSb, m.gammaSa, m.absorption, m.quality?.origin ?? '', m.quality?.specification ?? '', m.quality?.batchNo ?? '', m.quality?.testReportNo ?? '']),
+      ['材料', '类型', '比例(%)', '毛体积密度', '表观密度', '吸水率(%)', '产地/料场', '规格', '批次', '检测报告号', '黏附性等级', '项目最低等级'],
+      ...state.materials.map(m => [m.name, m.type, m.proportion, m.gammaSb, m.gammaSa, m.absorption, m.quality?.origin ?? '', m.quality?.specification ?? '', m.quality?.batchNo ?? '', m.quality?.testReportNo ?? '', m.quality?.adhesionGrade ?? '', m.quality?.minimumAdhesionGrade ?? '']),
     ]),
     csvSection('合成级配', [
       ['筛孔(mm)', ...state.sieves],
@@ -66,6 +79,8 @@ export function exportDesignWorkbook(state: ExportState): string {
       ['OAC2', state.oacResult.oac2 ?? '无共同合格区间'],
       ['共同区间', state.oacResult.oacMin === null ? '无' : `${state.oacResult.oacMin}~${state.oacResult.oacMax}`],
       ['最终OAC', state.oacResult.oac],
+      ['RAP旧沥青贡献', binderBalance?.recycledAsphalt ?? 0],
+      ['应添加新沥青', binderBalance?.virginAsphalt ?? state.oacResult.oac],
       ['a1 最大密度', state.oacResult.a1],
       ['a2 最大稳定度', state.oacResult.a2],
       ['a3 目标空隙率', state.oacResult.a3],
@@ -73,8 +88,24 @@ export function exportDesignWorkbook(state: ExportState): string {
       ...state.checks.map(c => [c.label, c.value, c.requirement, c.ok ? '合格' : '不满足']),
     ] : [['无计算结果']]),
     csvSection('性能验证', [
-      ['验证项目', '实测值', '单位', '要求', '启用', '判定'],
-      ...state.performanceRecords.map(record => [record.label, record.value, record.unit, record.requirement, record.enabled ? '是' : '否', record.ok === true ? '合格' : record.ok === false ? '不满足' : '待补充']),
+      ['验证项目', '实测值', '单位', '要求', '依据', '启用', '判定'],
+      ...state.performanceRecords.map(record => [record.label, record.value, record.unit, record.requirement, record.sourceLabel ?? record.sourceId ?? '', record.enabled ? '是' : '否', record.ok === true ? '合格' : record.ok === false ? '不满足' : '待补充']),
+    ]),
+    csvSection('专项校核', [
+      ['项目', '数值', '要求', '依据', '判定', '说明'],
+      ...state.specialtyChecks.map(check => [check.label, String(check.value), check.requirement, check.sourceId, check.ok === true ? '合格' : check.ok === false ? '不满足' : '待补充', check.message]),
+      [],
+      ['RAP掺量', state.specialtyParams.rap.content],
+      ['RAP旧沥青含量', state.specialtyParams.rap.asphaltContent],
+      ['RAP分档', state.specialtyParams.rap.fractions.map(fraction => `${fraction.label}:${fraction.yield}%`).join(' / ')],
+      ['RAP含水率', state.specialtyParams.rap.moisture],
+      ['RAP最大粒径', state.specialtyParams.rap.maxParticleSize],
+      ['高模量外掺剂', state.specialtyParams.additives.highModulusAdditiveContent],
+      ['纤维类型', state.specialtyParams.additives.fiberType],
+    ]),
+    csvSection('施工控制', [
+      ['控制项', '建议', '依据', '适用条件'],
+      ...state.constructionGuidance.map(item => [item.label, item.message, `${item.source} ${item.sourceVersion}`, item.condition]),
     ]),
     csvSection('问题台账', [
       ['来源', '级别', '问题', '详情', '处置建议', '责任人', '状态'],
@@ -86,6 +117,7 @@ export function exportDesignWorkbook(state: ExportState): string {
 }
 
 export async function exportDesignXlsx(state: ExportState): Promise<ArrayBuffer> {
+  const binderBalance = state.oacResult ? calculateBinderBalance(state.oacResult.oac, state.specialtyParams.rap) : null;
   const workbook = new ExcelJS.Workbook();
   workbook.creator = 'AC Mix Design Workbench';
   workbook.created = new Date();
@@ -103,10 +135,15 @@ export async function exportDesignXlsx(state: ExportState): Promise<ArrayBuffer>
     ['批准人', state.projectLedger.approver],
     ['报告编号', state.projectLedger.reportCode],
     ['规范版本', state.standard.label],
+    ['知识库版本', state.knowledgeVersion],
+    ['工程类型', state.basicInfo.projectDomain],
+    ['设计方法', state.basicInfo.designMethod],
+    ['交通等级', state.basicInfo.trafficLevel],
+    ['材料体系', state.basicInfo.materialSystem],
   ]);
   appendSheet(workbook, '原材料', [
-    ['材料', '类型', '比例(%)', '毛体积密度', '表观密度', '吸水率(%)', '产地/料场', '规格', '批次', '检测报告号', '针片状', '压碎值', '砂当量', '亲水系数'],
-    ...state.materials.map(m => [m.name, m.type, m.proportion, m.gammaSb, m.gammaSa, m.absorption, m.quality?.origin ?? '', m.quality?.specification ?? '', m.quality?.batchNo ?? '', m.quality?.testReportNo ?? '', m.quality?.flakiness ?? '', m.quality?.crushingValue ?? '', m.quality?.sandEquivalent ?? '', m.quality?.hydrophilicCoefficient ?? '']),
+    ['材料', '类型', '比例(%)', '毛体积密度', '表观密度', '吸水率(%)', '产地/料场', '规格', '批次', '检测报告号', '针片状', '压碎值', '砂当量', '亲水系数', '黏附性等级', '项目最低等级'],
+    ...state.materials.map(m => [m.name, m.type, m.proportion, m.gammaSb, m.gammaSa, m.absorption, m.quality?.origin ?? '', m.quality?.specification ?? '', m.quality?.batchNo ?? '', m.quality?.testReportNo ?? '', m.quality?.flakiness ?? '', m.quality?.crushingValue ?? '', m.quality?.sandEquivalent ?? '', m.quality?.hydrophilicCoefficient ?? '', m.quality?.adhesionGrade ?? '', m.quality?.minimumAdhesionGrade ?? '']),
     [],
     ['沥青供应商', state.asphaltQuality.supplier],
     ['沥青批号', state.asphaltQuality.batchNo],
@@ -131,6 +168,8 @@ export async function exportDesignXlsx(state: ExportState): Promise<ArrayBuffer>
     ['OAC2', state.oacResult.oac2 ?? '无共同合格区间'],
     ['共同区间', state.oacResult.oacMin === null ? '无' : `${state.oacResult.oacMin}~${state.oacResult.oacMax}`],
     ['最终OAC', state.oacResult.oac],
+    ['RAP旧沥青贡献', binderBalance?.recycledAsphalt ?? 0],
+    ['应添加新沥青', binderBalance?.virginAsphalt ?? state.oacResult.oac],
     ['a1 最大密度', state.oacResult.a1],
     ['a2 最大稳定度', state.oacResult.a2],
     ['a3 目标空隙率', state.oacResult.a3],
@@ -140,8 +179,24 @@ export async function exportDesignXlsx(state: ExportState): Promise<ArrayBuffer>
     ...state.checks.map(c => [c.label, c.value, c.requirement, c.ok ? '合格' : '不满足']),
   ] : [['无计算结果']]);
   appendSheet(workbook, '性能验证', [
-    ['验证项目', '实测值', '单位', '要求', '启用', '判定'],
-    ...state.performanceRecords.map(record => [record.label, record.value, record.unit, record.requirement, record.enabled ? '是' : '否', record.ok === true ? '合格' : record.ok === false ? '不满足' : '待补充']),
+    ['验证项目', '实测值', '单位', '要求', '依据', '启用', '判定'],
+    ...state.performanceRecords.map(record => [record.label, record.value, record.unit, record.requirement, record.sourceLabel ?? record.sourceId ?? '', record.enabled ? '是' : '否', record.ok === true ? '合格' : record.ok === false ? '不满足' : '待补充']),
+  ]);
+  appendSheet(workbook, '专项校核', [
+    ['项目', '数值', '要求', '依据', '判定', '说明'],
+    ...state.specialtyChecks.map(check => [check.label, String(check.value), check.requirement, check.sourceId, check.ok === true ? '合格' : check.ok === false ? '不满足' : '待补充', check.message]),
+    [],
+    ['RAP掺量', state.specialtyParams.rap.content],
+    ['RAP旧沥青含量', state.specialtyParams.rap.asphaltContent],
+    ['RAP分档', state.specialtyParams.rap.fractions.map(fraction => `${fraction.label}:${fraction.yield}%`).join(' / ')],
+    ['RAP含水率', state.specialtyParams.rap.moisture],
+    ['RAP最大粒径', state.specialtyParams.rap.maxParticleSize],
+    ['高模量外掺剂', state.specialtyParams.additives.highModulusAdditiveContent],
+    ['纤维类型', state.specialtyParams.additives.fiberType],
+  ]);
+  appendSheet(workbook, '施工控制', [
+    ['控制项', '建议', '依据', '适用条件'],
+    ...state.constructionGuidance.map(item => [item.label, item.message, `${item.source} ${item.sourceVersion}`, item.condition]),
   ]);
   appendSheet(workbook, '问题台账', [
     ['来源', '级别', '问题', '详情', '处置建议', '责任人', '状态'],

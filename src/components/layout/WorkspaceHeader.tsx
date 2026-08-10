@@ -6,14 +6,14 @@ import { cn } from '../../lib/utils';
 
 export function WorkspaceHeader() {
   const { oacResult, basicInfo, step, standardProfile, workflowStatus, projectReadiness, reportVersion } = useMixDesign();
-  const totalSteps = 8;
+  const totalSteps = 9;
   const progressPercent = ((step + 1) / totalSteps) * 100;
   const activeFlow = workflowStatus[step];
   const gradationStatus = workflowStatus[2]?.status ?? 'idle';
   const oacStatus = workflowStatus[4]?.status ?? 'idle';
 
   return (
-    <div className="bg-surface/30 border-b border-border shrink-0 py-4 px-8 print:hidden relative overflow-hidden backdrop-blur-sm z-10">
+    <div className="bg-surface/30 border-b border-border shrink-0 px-3 py-3 sm:px-8 sm:py-4 print:hidden relative overflow-hidden backdrop-blur-sm z-10">
       {/* Subtle Background Pattern */}
       <div className="absolute right-0 top-0 bottom-0 w-1/2 overflow-hidden opacity-5 pointer-events-none flex items-center justify-end pr-10">
         <Network className="w-32 h-32 text-amber" strokeWidth={0.5} />
@@ -21,7 +21,7 @@ export function WorkspaceHeader() {
       
       <div className="relative z-10 flex flex-col gap-3">
         <div className="flex items-start gap-5 overflow-x-auto custom-scrollbar pb-1">
-          <div className="min-w-[260px] shrink-0">
+          <div className="min-w-[210px] sm:min-w-[260px] shrink-0">
             <div className="text-[10px] text-text3 font-mono tracking-widest uppercase">Project Ledger</div>
             <div className="mt-1 text-[16px] text-text1 font-bold truncate">{basicInfo.projName || '未命名项目'}</div>
             <div className="mt-1 text-[11px] text-text3 font-mono truncate">{basicInfo.projUnit || '未填写编制单位'} · {standardProfile.label}</div>
@@ -46,6 +46,7 @@ export function WorkspaceHeader() {
               {step === 5 && 'Analysis'}
               {step === 6 && 'Verification'}
               {step === 7 && 'Report'}
+              {step === 8 && 'Knowledge'}
             </div>
           </div>
         </div>

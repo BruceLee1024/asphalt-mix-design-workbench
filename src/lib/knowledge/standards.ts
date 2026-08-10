@@ -1,0 +1,48 @@
+import type { KnowledgeRecord } from './types';
+
+export const STANDARD_KNOWLEDGE: KnowledgeRecord[] = [
+  {
+    id: 'std-jtg-f40-2004',
+    label: 'JTG F40-2004 公路沥青路面施工技术规范',
+    source: 'JTG F40',
+    sourceVersion: '2004',
+    applicableMixTypes: 'all',
+    applicableMethods: 'all',
+    condition: '公路沥青路面目标配合比、生产配合比及施工控制',
+    severity: 'info',
+    message: '用于公路沥青混合料级配、马歇尔指标、施工温度和施工质量控制的基础依据。',
+  },
+  {
+    id: 'std-jtg-3410-2025',
+    label: 'JTG 3410-2025 公路工程沥青及沥青混合料试验规程',
+    source: 'JTG 3410',
+    sourceVersion: '2025',
+    applicableMixTypes: 'all',
+    applicableMethods: 'all',
+    condition: '当前项目选择新试验规程时适用',
+    severity: 'info',
+    message: '用于体积指标、马歇尔试验、车辙、水稳定、低温弯曲等试验记录的依据说明。',
+  },
+  {
+    id: 'std-jtg-e20-2011',
+    label: 'JTG E20-2011 公路工程沥青及沥青混合料试验规程',
+    source: 'JTG E20',
+    sourceVersion: '2011',
+    applicableMixTypes: 'all',
+    applicableMethods: 'all',
+    condition: '历史项目选择旧试验规程时适用',
+    severity: 'info',
+    message: '用于历史项目的试验规程版本记录，报告中应明确与当前项目要求一致。',
+  },
+  {
+    id: 'std-airport-asphalt-design',
+    label: '民用机场沥青道面设计规范',
+    source: '民用机场道面设计规范体系',
+    sourceVersion: '项目指定版本',
+    applicableMixTypes: 'all',
+    applicableMethods: 'all',
+    condition: '工程类型为机场道面时适用',
+    severity: 'warning',
+    message: '机场道面需补充飞机机型、起落架、运行架次及力学模型参数；本应用第一版仅保留 CDF 校核入口。',
+  },
+];
