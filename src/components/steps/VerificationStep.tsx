@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertTriangle, CheckCircle2, CircleDashed } from 'lucide-react';
-import { Button, Card, Input, SLabel } from '../ui';
+import { Button, Card, Input, Select, SLabel } from '../ui';
 import { useMixDesign } from '../../store/MixDesignContext';
 import { cn } from '../../lib/utils';
 
@@ -42,7 +42,7 @@ export function VerificationStep() {
           <table className="w-full border-collapse font-mono text-xs">
             <thead>
               <tr>
-                {['启用', '验证项目', '实测值', '单位', '要求', '依据', '判定'].map(h => (
+                {['启用', '验证项目', '实测值', '单位', '要求', '依据 / 适用条件', '判定'].map(h => (
                   <th key={h} className="bg-app-bg text-text3 text-[10px] tracking-wide py-2.5 px-3 text-center border-b border-border font-normal whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -64,7 +64,31 @@ export function VerificationStep() {
                   </td>
                   <td className="py-2.5 px-3 text-center border-b border-border2/60 text-text3">{record.unit}</td>
                   <td className="py-2.5 px-3 text-center border-b border-border2/60 text-text3">{record.requirement}</td>
-                  <td className="py-2.5 px-3 text-center border-b border-border2/60 text-text3">{record.sourceLabel ?? record.sourceId ?? '-'}</td>
+                  <td className="py-2.5 px-3 text-center border-b border-border2/60 text-text3">
+                    <Select
+                      className="h-7 min-w-[112px] p-1 text-[10px]"
+                      value={record.sourceType ?? 'standard'}
+                      onChange={e => updatePerformanceRecord(record.id, { sourceType: e.target.value as 'standard' | 'project' | 'pending-review' })}
+                      aria-label={`${record.label} 要求来源`}
+                    >
+                      <option value="standard">规范要求</option>
+                      <option value="project">项目要求</option>
+                      <option value="pending-review">待确认要求</option>
+                    </Select>
+                    {record.sourceType === 'project' ? (
+                      <Input
+                        className="mt-1 h-7 w-[112px] p-1 text-center text-[10px]"
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={record.projectRequirement || ''}
+                        onChange={e => updatePerformanceRecord(record.id, { projectRequirement: Number(e.target.value) || undefined })}
+                        placeholder="项目阈值"
+                        aria-label={`${record.label} 项目阈值`}
+                      />
+                    ) : <div className={cn("mt-1 text-[10px]", record.sourceType === 'standard' ? 'text-green' : 'text-yellow')}>{record.sourceLabel ?? record.sourceId ?? '-'}</div>}
+                    {record.condition && <div className="mt-1 text-[10px] leading-relaxed">{record.condition}</div>}
+                  </td>
                   <td className={cn("py-2.5 px-3 text-center border-b border-border2/60 font-bold", record.ok === true ? "text-green" : record.ok === false ? "text-red" : "text-yellow")}>
                     {record.ok === true ? '合格' : record.ok === false ? '不满足' : '待补充'}
                   </td>

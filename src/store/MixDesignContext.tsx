@@ -24,7 +24,7 @@ import type {
   StepWorkflowStatus,
 } from '../types';
 import { ASPHALT_DENSITIES, DENSE_AC_TYPES, GRADS, SPECS, STANDARD_PROFILES } from '../lib/constants';
-import { buildSpecialtyChecks, calculateBlendGradation, calculateOacAnalysis, calculatePatentOac, calculateSuperpaveResult, calculateTheoreticalMaxDensity, calculateVolumetrics, fitBlendToMidpoint, validateGradation } from '../lib/math';
+import { buildSpecialtyChecks, calculateBinderBalance, calculateBlendGradation, calculateOacAnalysis, calculatePatentOac, calculateSuperpaveResult, calculateTheoreticalMaxDensity, calculateVolumetrics, fitBlendToMidpoint, validateGradation } from '../lib/math';
 import { getInputAudit, getWorkflowStatus } from '../lib/workflow';
 import {
   calculateMarshallGroup,
@@ -145,6 +145,7 @@ interface MixDesignContextType extends MixDesignState {
   specialtyParams: SpecialtyParameters;
   updateSpecialtyParams: (updates: SpecialtyParameterPatch) => void;
   specialtyChecks: SpecialtyCheck[];
+  binderBalance: ReturnType<typeof calculateBinderBalance> | null;
   constructionGuidance: ConstructionKnowledgeRecord[];
   applicableKnowledge: KnowledgeRecord[];
   knowledgeVersion: string;
@@ -167,10 +168,10 @@ const defaultBasicInfo: BasicInfo = {
   designMethod: 'marshall',
   trafficLevel: 'heavy',
   esals: 12000000,
-  materialSystem: 'modified',
+  materialSystem: 'base',
   climate: '1区（夏炎热冬严寒）',
-  projName: 'XX高速公路路面工程',
-  projUnit: 'XX工程检测有限公司',
+  projName: '',
+  projUnit: '',
   asphaltGrade: '70A',
   denB: 1.030,
   gammaSb: 2.710,
@@ -243,7 +244,8 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
   const standardProfile = STANDARD_PROFILES[state.basicInfo.standardProfileId];
   const isDenseAc = DENSE_AC_TYPES.includes(state.basicInfo.mixType as any);
 
-  const blendDesign = useMemo(() => calculateBlendGradation(state.materials), [state.materials]);
+  const blendDesign = useMemo(() => calculateBlendGradation(state.materials, state.specialtyParams.rap), [state.materials, state.specialtyParams.rap]);
+  const binderBalance = useMemo(() => state.oacResult ? calculateBinderBalance(state.oacResult.oac, state.specialtyParams.rap) : null, [state.oacResult, state.specialtyParams.rap]);
   const gradingWarnings = useMemo(() => {
     const g = GRADS[state.basicInfo.mixType];
     return [...blendDesign.warnings, ...validateGradation(blendDesign.passRates, g)];
@@ -260,7 +262,11 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
   const workflowStatus = useMemo(() => getWorkflowStatus(auditInput), [auditInput]);
   const performanceRecords = useMemo(() => calculatePerformanceChecks(state.performanceRecords, state.basicInfo), [state.performanceRecords, state.basicInfo]);
   const performanceConclusion = useMemo(() => getPerformanceConclusion(performanceRecords), [performanceRecords]);
-  const specialtyChecks = useMemo(() => buildSpecialtyChecks(state.basicInfo, state.specialtyParams), [state.basicInfo, state.specialtyParams]);
+  const specialtyChecks = useMemo(() => {
+    const checks = buildSpecialtyChecks(state.basicInfo, state.specialtyParams);
+    if (binderBalance && !binderBalance.ok) checks.push({ id: 'rap-virgin-asphalt', label: '应添加新沥青', value: `${binderBalance.virginAsphalt}%`, requirement: '>= 0%', ok: false, sourceId: 'rap-binder-balance', message: 'RAP 旧沥青贡献大于目标 OAC，请复核 RAP 掺量、旧沥青含量或目标油石比。', severity: 'blocking' });
+    return checks;
+  }, [binderBalance, state.basicInfo, state.specialtyParams]);
   const constructionGuidance = useMemo(() => getConstructionGuidance(state.basicInfo), [state.basicInfo]);
   const applicableKnowledge = useMemo(() => getApplicableKnowledge(state.basicInfo), [state.basicInfo]);
   const labInput = useMemo(() => ({
@@ -325,13 +331,10 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
   const createProject = () => {
     const nextState = createDefaultState();
     const now = new Date().toISOString();
-    const index = portfolio.projects.length + 1;
-    nextState.basicInfo = { ...nextState.basicInfo, projName: `新建工程 ${index}` };
-    nextState.projectLedger = { ...nextState.projectLedger, projectCode: `PRJ-AC-${new Date().getFullYear()}-${String(index).padStart(3, '0')}`, sampleCode: 'YP-AC-001' };
     const project = projectFromState(nextState, now);
-    const design = designFromState(project.id, nextState, now);
+    const design = designFromState(project.id, nextState, now, '未命名配合比设计');
     setPortfolio(prev => ({ ...prev, activeProjectId: project.id, activeDesignId: design.id, projects: [...prev.projects, project], designs: [...prev.designs, design] }));
-    setState(nextState);
+    setState({ ...nextState, step: 0 });
     setTmrdResult(null);
   };
 
@@ -340,11 +343,11 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
     const nextState = normalizeState({
       ...createDefaultState(),
       basicInfo: { ...createDefaultState().basicInfo, projName: activeProject.name, projUnit: state.basicInfo.projUnit },
-      projectLedger: { ...createDefaultProjectLedger(), projectCode: activeProject.projectCode, clientUnit: activeProject.clientUnit, sampleCode: `YP-AC-${String(projectDesigns.length + 1).padStart(3, '0')}` },
+      projectLedger: { ...createDefaultProjectLedger(), projectCode: activeProject.projectCode, clientUnit: activeProject.clientUnit },
     });
-    const design = designFromState(activeProject.id, nextState, now, `配合比设计 ${projectDesigns.length + 1}`);
+    const design = designFromState(activeProject.id, nextState, now, '未命名配合比设计');
     setPortfolio(prev => ({ ...prev, activeDesignId: design.id, designs: [...prev.designs, design] }));
-    setState(nextState);
+    setState({ ...nextState, step: 0 });
     setTmrdResult(null);
   };
 
@@ -416,11 +419,11 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
       let marshallData = prev.marshallData;
       let marshallGroups = prev.marshallGroups;
       if (updates.mixType && updates.mixType !== prev.basicInfo.mixType) {
-        materials = createDefaultMaterials(updates.mixType as keyof typeof GRADS);
+        materials = normalizeNativeMaterialProportions(createDefaultMaterials(updates.mixType as keyof typeof GRADS), prev.specialtyParams.rap);
         marshallData = createMarshallRows(prev.oacInit);
         marshallGroups = createMarshallGroups(prev.oacInit);
       }
-      const resetPerformance = Boolean(updates.mixType || updates.designMethod || updates.materialSystem || updates.projectDomain);
+      const resetPerformance = Boolean(updates.mixType || updates.designMethod || updates.materialSystem || updates.projectDomain || updates.climate);
       return draftState({ ...prev, basicInfo, materials, marshallData, marshallGroups, performanceRecords: resetPerformance ? createDefaultPerformanceRecords(basicInfo) : prev.performanceRecords, oacResult: null });
     });
   };
@@ -465,11 +468,11 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
   };
 
   const fillDefaultMaterials = () => {
-    setState(prev => draftState({ ...prev, materials: createDefaultMaterials(prev.basicInfo.mixType), oacResult: null }));
+    setState(prev => draftState({ ...prev, materials: normalizeNativeMaterialProportions(createDefaultMaterials(prev.basicInfo.mixType), prev.specialtyParams.rap), oacResult: null }));
   };
 
   const fitMaterialsToMidpoint = () => {
-    setState(prev => draftState({ ...prev, materials: fitBlendToMidpoint(prev.materials, GRADS[prev.basicInfo.mixType]), oacResult: null }));
+    setState(prev => draftState({ ...prev, materials: fitBlendToMidpoint(prev.materials, GRADS[prev.basicInfo.mixType], prev.specialtyParams.rap), oacResult: null }));
   };
 
   const updateGradingPassRate = (index: number, value: number) => {
@@ -484,7 +487,7 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
   };
 
   const fillDefaultGrading = () => {
-    setState(prev => draftState({ ...prev, materials: fitBlendToMidpoint(prev.materials, GRADS[prev.basicInfo.mixType]), oacResult: null }));
+    setState(prev => draftState({ ...prev, materials: fitBlendToMidpoint(prev.materials, GRADS[prev.basicInfo.mixType], prev.specialtyParams.rap), oacResult: null }));
   };
 
   const calcTMRD = (localOacInit: number) => {
@@ -599,18 +602,24 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
   };
 
   const updateSpecialtyParams = (updates: SpecialtyParameterPatch) => {
-    setState(prev => draftState({
-      ...prev,
-      specialtyParams: {
+    setState(prev => {
+      const rap = { ...prev.specialtyParams.rap, ...updates.rap };
+      const sieveCount = GRADS[prev.basicInfo.mixType].sieves.length;
+      rap.fractions = rap.fractions.map(fraction => ({ ...fraction, passRates: fraction.passRates.length === sieveCount ? fraction.passRates : Array.from({ length: sieveCount }, () => 0) }));
+      return draftState({
+        ...prev,
+        materials: updates.rap ? normalizeNativeMaterialProportions(prev.materials, rap) : prev.materials,
+        specialtyParams: {
         ...prev.specialtyParams,
         ...updates,
-        rap: { ...prev.specialtyParams.rap, ...updates.rap },
+        rap,
         superpave: { ...prev.specialtyParams.superpave, ...updates.superpave },
         sma: { ...prev.specialtyParams.sma, ...updates.sma },
         additives: { ...prev.specialtyParams.additives, ...updates.additives },
       },
-      oacResult: updates.superpave ? null : prev.oacResult,
-    }));
+        oacResult: updates.superpave ? null : prev.oacResult,
+      });
+    });
   };
 
   const freezeReport = () => {
@@ -683,6 +692,7 @@ export function MixDesignProvider({ children }: { children: ReactNode }) {
     specialtyParams: state.specialtyParams,
     updateSpecialtyParams,
     specialtyChecks,
+    binderBalance,
     constructionGuidance,
     applicableKnowledge,
     knowledgeVersion: KNOWLEDGE_VERSION,
@@ -752,14 +762,29 @@ function normalizeImportedState(parsed: Partial<MixDesignState>): MixDesignState
 }
 
 function normalizeState(state: MixDesignState): MixDesignState {
+  const legacyRap = state.materials.find(material => material.type === 'rap');
+  const specialtyParams = mergeSpecialtyParams(state.specialtyParams);
+  if (legacyRap && !specialtyParams.rap.enabled) {
+    specialtyParams.rap = {
+      ...specialtyParams.rap,
+      enabled: true,
+      content: legacyRap.proportion,
+      gradationMode: 'single',
+      fractions: [{ id: 'rap-single', label: legacyRap.name || 'RAP', yield: 100, passRates: legacyRap.passRates }],
+    };
+  }
+  const basicInfo = state.basicInfo.materialSystem === 'rap'
+    ? { ...state.basicInfo, materialSystem: 'base' as const }
+    : state.basicInfo;
   return {
     ...state,
+    basicInfo,
     projectLedger: { ...createDefaultProjectLedger(), ...state.projectLedger },
     asphaltQuality: { ...createDefaultAsphaltQuality(), ...state.asphaltQuality },
-    materials: state.materials.map(m => ({ ...m, quality: { ...createDefaultMaterialQuality(m.type), ...m.quality } })),
+    materials: state.materials.filter(material => !specialtyParams.rap.enabled || material.type !== 'rap').map(m => ({ ...m, quality: { ...createDefaultMaterialQuality(m.type), ...m.quality } })),
     marshallGroups: state.marshallGroups.length ? state.marshallGroups : createMarshallGroups(state.oacInit),
     performanceRecords: state.performanceRecords.length ? state.performanceRecords : createDefaultPerformanceRecords(state.basicInfo),
-    specialtyParams: mergeSpecialtyParams(state.specialtyParams),
+    specialtyParams,
     reportVersion: { ...createDefaultReportVersion(), ...state.reportVersion },
   };
 }
@@ -783,7 +808,7 @@ function round3(value: number) {
 function inferMaterialSystem(mixType: BasicInfo['mixType'], fallback: BasicInfo['materialSystem']): BasicInfo['materialSystem'] {
   if (mixType === 'SMA-13') return 'sma';
   if (mixType === 'HM-20') return 'high-modulus';
-  if (mixType === 'RAP-AC-20') return 'rap';
+  if (mixType === 'RAP-AC-20') return 'base';
   if (mixType === 'CMA-13') return 'cold-mix';
   if (mixType === 'OGFC-13') return 'modified';
   return fallback === 'sma' || fallback === 'high-modulus' || fallback === 'rap' || fallback === 'cold-mix' ? 'modified' : fallback;
@@ -802,6 +827,22 @@ function mergeSpecialtyParams(params: Partial<SpecialtyParameters> | undefined):
     sma: { ...fallback.sma, ...params?.sma },
     additives: { ...fallback.additives, ...params?.additives },
   };
+}
+
+function normalizeNativeMaterialProportions(materials: MaterialSource[], rap: SpecialtyParameters['rap']) {
+  if (!rap.enabled) return materials;
+  const natives = materials.filter(material => material.type !== 'rap');
+  const total = natives.reduce((sum, material) => sum + Math.max(0, material.proportion), 0);
+  const target = Math.max(0, 100 - rap.content);
+  if (!total) return natives.map((material, index) => ({ ...material, proportion: index === 0 ? target : 0 }));
+  let assigned = 0;
+  return natives.map((material, index) => {
+    const proportion = index === natives.length - 1
+      ? Math.round((target - assigned) * 10) / 10
+      : Math.round((Math.max(0, material.proportion) / total * target) * 10) / 10;
+    assigned += proportion;
+    return { ...material, proportion };
+  });
 }
 
 function createPortfolioFromState(state: MixDesignState): MixDesignPortfolio {

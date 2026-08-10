@@ -25,6 +25,16 @@ export function ProjectLedgerStep() {
   } = useMixDesign();
   const blockingCount = reviewIssues.filter(issue => issue.level === 'blocking').length;
   const warningCount = reviewIssues.filter(issue => issue.level === 'warning').length;
+  const requiredProjectFields = [
+    { label: '工程名称', value: basicInfo.projName },
+    { label: '编制单位', value: basicInfo.projUnit },
+    { label: '工程编号', value: projectLedger.projectCode },
+    { label: '委托单位', value: projectLedger.clientUnit },
+    { label: '样品编号', value: projectLedger.sampleCode },
+  ];
+  const missingProjectFields = requiredProjectFields.filter(field => !field.value.trim());
+  const canContinue = missingProjectFields.length === 0;
+  const requiredInputClass = (value: string) => !value.trim() ? 'border-red/50 focus:border-red focus:ring-red/10' : '';
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -76,21 +86,32 @@ export function ProjectLedgerStep() {
 
       <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_420px] gap-4">
         <Card title="当前设计台账信息">
+          {missingProjectFields.length ? (
+            <InfoBox className="mb-5 mt-0 border-l-red text-red">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              新建项目需先补全：{missingProjectFields.map(field => field.label).join('、')}。补全后才能进入下一步设计。
+            </InfoBox>
+          ) : (
+            <InfoBox className="mb-5 mt-0 border-l-green text-green">
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+              项目基本信息已补全，可以进入基本参数设置。
+            </InfoBox>
+          )}
           <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-5">
             <FormGroup label="工程名称">
-              <Input value={basicInfo.projName} onChange={e => updateBasicInfo({ projName: e.target.value })} placeholder="填写工程名称" />
+              <Input className={requiredInputClass(basicInfo.projName)} value={basicInfo.projName} onChange={e => updateBasicInfo({ projName: e.target.value })} placeholder="填写工程名称" />
             </FormGroup>
             <FormGroup label="编制单位">
-              <Input value={basicInfo.projUnit} onChange={e => updateBasicInfo({ projUnit: e.target.value })} placeholder="填写编制单位" />
+              <Input className={requiredInputClass(basicInfo.projUnit)} value={basicInfo.projUnit} onChange={e => updateBasicInfo({ projUnit: e.target.value })} placeholder="填写编制单位" />
             </FormGroup>
             <FormGroup label="工程编号">
-              <Input value={projectLedger.projectCode} onChange={e => updateProjectLedger({ projectCode: e.target.value })} placeholder="PRJ-AC-2026-001" />
+              <Input className={requiredInputClass(projectLedger.projectCode)} value={projectLedger.projectCode} onChange={e => updateProjectLedger({ projectCode: e.target.value })} placeholder="PRJ-AC-2026-001" />
             </FormGroup>
             <FormGroup label="委托单位">
-              <Input value={projectLedger.clientUnit} onChange={e => updateProjectLedger({ clientUnit: e.target.value })} placeholder="填写委托单位" />
+              <Input className={requiredInputClass(projectLedger.clientUnit)} value={projectLedger.clientUnit} onChange={e => updateProjectLedger({ clientUnit: e.target.value })} placeholder="填写委托单位" />
             </FormGroup>
             <FormGroup label="样品编号">
-              <Input value={projectLedger.sampleCode} onChange={e => updateProjectLedger({ sampleCode: e.target.value })} placeholder="YP-AC-001" />
+              <Input className={requiredInputClass(projectLedger.sampleCode)} value={projectLedger.sampleCode} onChange={e => updateProjectLedger({ sampleCode: e.target.value })} placeholder="YP-AC-001" />
             </FormGroup>
             <FormGroup label="取样地点">
               <Input value={projectLedger.sampleLocation} onChange={e => updateProjectLedger({ sampleLocation: e.target.value })} placeholder="料仓/拌合站/现场" />
@@ -157,7 +178,7 @@ export function ProjectLedgerStep() {
       </Card>
 
       <div className="flex justify-end mt-6 pb-2">
-        <Button onClick={() => { markStepDone(0); setStep(1); }}>
+        <Button disabled={!canContinue} onClick={() => { if (!canContinue) return; markStepDone(0); setStep(1); }}>
           下一步：基本参数 →
         </Button>
       </div>

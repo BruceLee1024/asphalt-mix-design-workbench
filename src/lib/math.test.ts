@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildSpecialtyChecks, calculateBlendGradation, calculateOacAnalysis, calculatePatentOac, calculateSuperpaveResult, calculateVolumetrics, validateGradation } from './math';
+import { buildSpecialtyChecks, calculateBinderBalance, calculateBlendGradation, calculateOacAnalysis, calculatePatentOac, calculateSuperpaveResult, calculateVolumetrics, fitBlendToMidpoint, validateGradation } from './math';
 import { GRADS, SPECS } from './constants';
 import { getConstructionGuidance, getGradationSpec, getPerformanceRequirements } from './knowledge';
 import { getWorkflowStatus } from './workflow';
@@ -27,6 +27,36 @@ test('calculateBlendGradation weights material passing rates', () => {
   const blend = calculateBlendGradation(materials);
   assert.deepEqual(blend.passRates, [100, 88, 48]);
   assert.equal(blend.totalProportion, 100);
+});
+
+test('fixed RAP fractions stay in blend while midpoint fitting only adjusts virgin materials', () => {
+  const materials: MaterialSource[] = [
+    { id: 'a', name: '碎石', type: 'coarse', proportion: 60, gammaSb: 2.7, gammaSa: 2.74, absorption: 0.5, passRates: [100, 20, 0] },
+    { id: 'b', name: '机制砂', type: 'fine', proportion: 40, gammaSb: 2.65, gammaSa: 2.7, absorption: 0.8, passRates: [100, 100, 80] },
+  ];
+  const rap = createDefaultSpecialtyParameters().rap;
+  rap.enabled = true;
+  rap.content = 30;
+  rap.fractions = [
+    { id: 'fine', label: '细料', yield: 80, passRates: [100, 95, 65] },
+    { id: 'coarse', label: '粗料', yield: 20, passRates: [100, 40, 5] },
+  ];
+  const fitted = fitBlendToMidpoint(materials, { lo: [100, 30, 10], hi: [100, 70, 50], sieves: [16, 4.75, 0.075] }, rap);
+  assert.equal(fitted.reduce((sum, material) => sum + material.proportion, 0), 70);
+  const blend = calculateBlendGradation(fitted, rap);
+  assert.equal(blend.totalProportion, 100);
+  assert.equal(rap.content * rap.fractions[0].yield / 100, 24);
+  assert.equal(rap.content * rap.fractions[1].yield / 100, 6);
+});
+
+test('RAP binder contribution is deducted from target OAC and flags negative virgin asphalt', () => {
+  const rap = createDefaultSpecialtyParameters().rap;
+  rap.enabled = true;
+  rap.content = 30;
+  rap.asphaltContent = 4.5;
+  assert.deepEqual(calculateBinderBalance(5, rap), { targetOac: 5, recycledAsphalt: 1.35, virginAsphalt: 3.65, ok: true });
+  rap.asphaltContent = 20;
+  assert.equal(calculateBinderBalance(5, rap).ok, false);
 });
 
 test('validateGradation reports out-of-range gradation values', () => {
@@ -120,6 +150,24 @@ test('getWorkflowStatus marks material proportion mismatch as warning', () => {
   assert.ok(statuses[2].reasons.some(reason => reason.includes('96.5')));
 });
 
+test('new project ledger starts blank and blocks project setup until required fields are filled', () => {
+  const projectLedger = createDefaultProjectLedger();
+  assert.equal(projectLedger.projectCode, '');
+  assert.equal(projectLedger.clientUnit, '');
+  assert.equal(projectLedger.sampleCode, '');
+
+  const statuses = getWorkflowStatus({
+    ...workflowInput(),
+    basicInfo: { ...basicInfo, projName: '', projUnit: '' },
+    projectLedger,
+  });
+
+  assert.equal(statuses[0].status, 'warning');
+  assert.ok(statuses[0].reasons.some(reason => reason.includes('工程名称')));
+  assert.ok(statuses[0].reasons.some(reason => reason.includes('工程编号')));
+  assert.ok(statuses[0].reasons.some(reason => reason.includes('样品编号')));
+});
+
 test('getWorkflowStatus marks gradation warnings on blend step', () => {
   const statuses = getWorkflowStatus(workflowInput({ gradingWarnings: ['筛孔 0.075mm 通过率超限。'] }));
   assert.equal(statuses[3].status, 'warning');
@@ -180,11 +228,27 @@ test('calculatePerformanceChecks returns pending, failed and passed conclusions'
   const pending = calculatePerformanceChecks(createDefaultPerformanceRecords(basicInfo), basicInfo);
   assert.equal(getPerformanceConclusion(pending), '待补充');
 
-  const failed: PerformanceTestRecord[] = pending.map(record => ({ ...record, value: record.key === 'rutting' ? 1000 : 100, ok: null }));
+  const failed: PerformanceTestRecord[] = pending.map(record => ({ ...record, value: record.key === 'waterStability' ? 50 : 100, ok: null }));
   assert.equal(getPerformanceConclusion(calculatePerformanceChecks(failed, basicInfo)), '需复核');
 
   const passed: PerformanceTestRecord[] = pending.map(record => ({ ...record, value: record.key === 'rutting' ? 4000 : record.key === 'lowTemperature' ? 2400 : 90, ok: null }));
   assert.equal(getPerformanceConclusion(calculatePerformanceChecks(passed, basicInfo)), '已通过');
+
+  const projectOverride = calculatePerformanceChecks([{
+    id: 'water-stability',
+    key: 'waterStability',
+    label: '浸水马歇尔残留稳定度',
+    value: 83,
+    unit: '%',
+    requirement: '',
+    sourceId: 'perf-water-stability',
+    sourceType: 'project',
+    projectRequirement: 85,
+    enabled: true,
+    ok: null,
+  }], basicInfo);
+  assert.equal(projectOverride[0].ok, false);
+  assert.equal(projectOverride[0].sourceLabel, '项目自定义要求');
 });
 
 test('knowledge base returns gradation, performance and construction rules by design context', () => {
@@ -192,6 +256,10 @@ test('knowledge base returns gradation, performance and construction rules by de
   const highModulusInfo = { ...basicInfo, mixType: 'HM-20' as const, materialSystem: 'high-modulus' as const };
   assert.ok(getPerformanceRequirements(highModulusInfo).some(rule => rule.id === 'perf-rutting-high-modulus'));
   assert.ok(getConstructionGuidance(highModulusInfo).some(rule => rule.id === 'const-high-modulus-discharge-temp'));
+  const baseRapInfo = { ...basicInfo, materialSystem: 'base' as const, climate: '1区（夏炎热冬严寒）' };
+  assert.equal(getPerformanceRequirements(baseRapInfo).find(rule => rule.key === 'waterStability')?.range?.lo, 80);
+  const modifiedZone4 = { ...basicInfo, materialSystem: 'modified' as const, climate: '4区（夏凉冬寒）' };
+  assert.equal(getPerformanceRequirements(modifiedZone4).find(rule => rule.key === 'freezeThaw')?.range?.lo, 75);
 });
 
 test('calculatePatentOac and Superpave result return OAC with warnings for risk conditions', () => {

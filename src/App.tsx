@@ -578,7 +578,7 @@ function FeatureList({ items }: { items: Array<[LucideIcon, string, string]> }) 
 }
 
 function MainContent() {
-  const { step, setStep, standardProfile } = useMixDesign();
+  const { step, setStep, standardProfile, workflowStatus } = useMixDesign();
   const [aiOpen, setAiOpen] = useState(false);
 
   return (
@@ -586,12 +586,28 @@ function MainContent() {
       <TopNav onExport={() => setStep(7)} onKnowledge={() => setStep(8)} />
       
       <div className="flex flex-1 overflow-hidden relative">
-        <Sidebar />
+        <div className="hidden lg:flex">
+          <Sidebar />
+        </div>
         
         <main className="flex-[1] flex flex-col min-w-0 relative z-0">
+          <nav className="lg:hidden shrink-0 flex gap-1 overflow-x-auto border-b border-border bg-surface px-3 py-2 custom-scrollbar" aria-label="设计流程">
+            {['台账', '参数', '材料', '级配', '马歇尔', 'OAC', '性能', '报告', '知识'].map((label, index) => {
+              const status = workflowStatus[index]?.status;
+              return (
+                <button
+                  key={label}
+                  onClick={() => setStep(index)}
+                  className={`shrink-0 rounded-sm border px-2.5 py-1.5 font-mono text-[10px] ${step === index ? 'border-amber bg-amber text-black' : status === 'blocked' ? 'border-red/30 text-red' : status === 'warning' ? 'border-yellow/30 text-yellow' : 'border-border text-text3'}`}
+                >
+                  {index + 1} {label}
+                </button>
+              );
+            })}
+          </nav>
           <WorkspaceHeader />
           
-          <div className="flex-1 overflow-y-auto px-6 py-8 md:px-10 md:py-10 custom-scrollbar relative print:p-0 print:overflow-visible">
+          <div className="flex-1 overflow-y-auto px-3 py-5 sm:px-6 sm:py-8 md:px-10 md:py-10 custom-scrollbar relative print:p-0 print:overflow-visible">
             <div className="w-full">
               <StepPanel active={step === 0}>
                 <ProjectLedgerStep />

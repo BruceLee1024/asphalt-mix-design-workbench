@@ -6,7 +6,7 @@ import { LineChart, Line, XAxis, YAxis, ReferenceLine, ResponsiveContainer } fro
 import { AlertTriangle, CheckCircle2, FileWarning } from 'lucide-react';
 
 export function ResultsStep() {
-  const { oacResult, marshallData, basicInfo, setStep, markStepDone, inputAudit, specialtyChecks, constructionGuidance } = useMixDesign();
+  const { oacResult, marshallData, basicInfo, setStep, markStepDone, inputAudit, specialtyChecks, constructionGuidance, binderBalance, specialtyParams } = useMixDesign();
 
   if (!oacResult) {
     return (
@@ -134,6 +134,17 @@ export function ResultsStep() {
           <div className="mt-3 text-yellow font-mono text-xs flex items-start gap-2"><AlertTriangle className="w-4 h-4 shrink-0" /> {oacResult.warnings.join(' | ')}</div>
         ) : null}
       </Card>
+
+      {specialtyParams.rap.enabled && binderBalance && (
+        <Card title="RAP 沥青平衡（油石比口径）">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <LedgerTile label="目标总油石比" value={`${binderBalance.targetOac.toFixed(3)}%`} tone="highlight" />
+            <LedgerTile label="RAP 旧沥青贡献" value={`${binderBalance.recycledAsphalt.toFixed(3)}%`} />
+            <LedgerTile label="应添加新沥青" value={`${binderBalance.virginAsphalt.toFixed(3)}%`} tone={binderBalance.ok ? 'default' : 'bad'} />
+          </div>
+          {!binderBalance.ok && <InfoBox className="border-l-red text-red">RAP 旧沥青贡献已大于目标 OAC，不能形成有效的生产投料方案。</InfoBox>}
+        </Card>
+      )}
 
       {specialtyChecks.length ? (
         <Card title="专项校核">

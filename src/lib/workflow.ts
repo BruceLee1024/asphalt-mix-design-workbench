@@ -53,7 +53,7 @@ export function getInputAudit(state: WorkflowStateInput): InputAudit {
 
 export function getWorkflowStatus(state: WorkflowStateInput): StepWorkflowStatus[] {
   const audit = getInputAudit(state);
-  const projectWarnings = getProjectWarnings(state.projectLedger);
+  const projectWarnings = getProjectWarnings(state.basicInfo, state.projectLedger);
   const hasBasicWarning = !state.basicInfo.projName.trim() || !state.basicInfo.projUnit.trim();
   const marshallComplete = audit.marshallWarnings.length === 0;
   const oacPassed = Boolean(state.oacResult && state.oacResult.oac2 !== null && state.oacResult.checks.every(check => check.ok));
@@ -85,9 +85,11 @@ export function getWorkflowStatus(state: WorkflowStateInput): StepWorkflowStatus
   });
 }
 
-function getProjectWarnings(projectLedger?: ProjectLedger) {
+function getProjectWarnings(basicInfo: BasicInfo, projectLedger?: ProjectLedger) {
   if (!projectLedger) return [];
   const warnings: string[] = [];
+  if (!basicInfo.projName.trim()) warnings.push('工程名称未填写。');
+  if (!basicInfo.projUnit.trim()) warnings.push('编制单位未填写。');
   if (!projectLedger.projectCode.trim()) warnings.push('工程编号未填写。');
   if (!projectLedger.clientUnit.trim()) warnings.push('委托单位未填写。');
   if (!projectLedger.sampleCode.trim()) warnings.push('样品编号未填写。');

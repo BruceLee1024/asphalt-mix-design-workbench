@@ -33,9 +33,19 @@ export interface BasicInfo {
 export interface RapParameters {
   enabled: boolean;
   content: number;
+  asphaltContent: number;
   moisture: number;
   maxParticleSize: number;
   falseParticleContent: number;
+  gradationMode: 'single' | 'split';
+  fractions: RapFraction[];
+}
+
+export interface RapFraction {
+  id: string;
+  label: string;
+  yield: number;
+  passRates: number[];
 }
 
 export interface SuperpaveParameters {
@@ -157,6 +167,8 @@ export interface MaterialQualityRecord {
   crushingValue: number;
   sandEquivalent: number;
   hydrophilicCoefficient: number;
+  adhesionGrade: number;
+  minimumAdhesionGrade: number;
 }
 
 export interface AsphaltQualityRecord {
@@ -198,6 +210,9 @@ export interface PerformanceTestRecord {
   requirement: string;
   sourceId?: string;
   sourceLabel?: string;
+  sourceType?: 'standard' | 'project' | 'pending-review';
+  projectRequirement?: number;
+  condition?: string;
   enabled: boolean;
   ok: boolean | null;
 }

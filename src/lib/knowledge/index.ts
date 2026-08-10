@@ -83,11 +83,26 @@ export function getMarshallSpecRecord(roadGrade: string): MarshallSpecKnowledgeR
   return MARSHALL_SPEC_KNOWLEDGE[roadGrade] ?? MARSHALL_SPEC_KNOWLEDGE.hw;
 }
 
-export function getPerformanceRequirements(basicInfo: Pick<BasicInfo, 'mixType' | 'designMethod' | 'materialSystem' | 'projectDomain'>): PerformanceKnowledgeRecord[] {
+export function getPerformanceRequirements(basicInfo: Pick<BasicInfo, 'mixType' | 'designMethod' | 'materialSystem' | 'projectDomain' | 'climate'>): PerformanceKnowledgeRecord[] {
   const systems = resolveMaterialSystems(basicInfo);
-  return PERFORMANCE_KNOWLEDGE.filter(rule => applies(rule, basicInfo.mixType, basicInfo.designMethod) && materialApplies(rule.materialSystems, systems))
+  const rules = PERFORMANCE_KNOWLEDGE.filter(rule => applies(rule, basicInfo.mixType, basicInfo.designMethod) && materialApplies(rule.materialSystems, systems))
     .filter(rule => basicInfo.projectDomain === 'airport' || rule.key !== 'cdf')
     .filter((rule, index, all) => all.findIndex(candidate => candidate.key === rule.key) === index);
+  return rules.map(rule => rule.key === 'waterStability' || rule.key === 'freezeThaw' ? climatePerformanceRule(rule, basicInfo) : rule);
+}
+
+function climatePerformanceRule(rule: PerformanceKnowledgeRecord, basicInfo: Pick<BasicInfo, 'materialSystem' | 'climate'>): PerformanceKnowledgeRecord {
+  const modified = basicInfo.materialSystem === 'modified' || basicInfo.materialSystem === 'sma' || basicInfo.materialSystem === 'high-modulus';
+  const zone4 = basicInfo.climate.startsWith('4区');
+  const water = modified ? (zone4 ? 80 : 85) : (zone4 ? 75 : 80);
+  const freeze = modified ? (zone4 ? 75 : 80) : (zone4 ? 70 : 75);
+  const value = rule.key === 'waterStability' ? water : freeze;
+  return {
+    ...rule,
+    range: { lo: value, hi: null },
+    condition: `${modified ? '改性沥青' : '基质沥青'}混合料，${zone4 ? '4区' : '1~3区'}；使用 RAP 时继承新沥青体系`,
+    message: `${rule.label}按${modified ? '改性沥青' : '基质沥青'}体系及气候区匹配，不因 RAP 掺量自动提高门槛。`,
+  };
 }
 
 export function getConstructionGuidance(basicInfo: Pick<BasicInfo, 'mixType' | 'designMethod' | 'materialSystem'>): ConstructionKnowledgeRecord[] {

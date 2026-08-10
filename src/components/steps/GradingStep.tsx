@@ -7,7 +7,7 @@ import { ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContai
 import { AlertTriangle, CheckCircle2, ListChecks, RefreshCcw, SlidersHorizontal, Target } from 'lucide-react';
 
 export function GradingStep() {
-  const { basicInfo, gradingData, fillDefaultGrading, gradingWarnings, blendDesign, materials, tmrdResult, calcTMRD, setStep, markStepDone, oacInit } = useMixDesign();
+  const { basicInfo, gradingData, fillDefaultGrading, gradingWarnings, blendDesign, materials, tmrdResult, calcTMRD, setStep, markStepDone, oacInit, specialtyParams } = useMixDesign();
   const [chartMode, setChartMode] = React.useState<'line' | 'bar'>('line');
 
   const g = GRADS[basicInfo.mixType];
@@ -25,7 +25,8 @@ export function GradingStep() {
       hi,
       mid: (lo + hi) / 2,
       inRange,
-      midDev: val - (lo + hi) / 2
+      midDev: val - (lo + hi) / 2,
+      productionPreference: productionPreference(s, val, lo, hi)
     };
   });
 
@@ -62,6 +63,7 @@ export function GradingStep() {
                 <th className="bg-app-bg text-text3 text-[10px] tracking-wide py-2.5 px-3 text-center border-b border-border font-normal whitespace-nowrap">合成通过率 (%)</th>
                 <th className="bg-app-bg text-text3 text-[10px] tracking-wide py-2.5 px-3 text-center border-b border-border font-normal whitespace-nowrap">范围判断</th>
                 <th className="bg-app-bg text-text3 text-[10px] tracking-wide py-2.5 px-3 text-center border-b border-border font-normal whitespace-nowrap">中值偏差</th>
+                <th className="bg-app-bg text-text3 text-[10px] tracking-wide py-2.5 px-3 text-center border-b border-border font-normal whitespace-nowrap">生产偏好</th>
               </tr>
             </thead>
             <tbody>
@@ -82,6 +84,9 @@ export function GradingStep() {
                       {d.midDev > 0 ? '+' : ''}{d.midDev.toFixed(1)}
                     </span>
                   </td>
+                  <td className={cn("py-2 px-3 text-center border-b border-border2/60 group-last:border-none", d.productionPreference === '命中' ? 'text-green' : d.productionPreference === '不适用' ? 'text-text3' : 'text-yellow')}>
+                    {d.productionPreference}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -93,7 +98,7 @@ export function GradingStep() {
           </InfoBox>
         )}
         <InfoBox>
-          合成级配来自 {materials.length} 档材料，比例合计 {blendDesign.totalProportion.toFixed(1)}%。0.075mm 筛通过率直接影响 VMA 和稳定性。
+          合成级配来自 {materials.length} 档原生料{specialtyParams.rap.enabled ? `及 ${specialtyParams.rap.content}% RAP` : ''}，比例合计 {blendDesign.totalProportion.toFixed(1)}%。生产偏好为辅助调校目标，不替代规范上下限。
         </InfoBox>
       </Card>
 
@@ -186,6 +191,15 @@ export function GradingStep() {
       </div>
     </div>
   );
+}
+
+function productionPreference(sieve: number, value: number, lo: number, hi: number) {
+  const mid = (lo + hi) / 2;
+  if (sieve === 9.5) return value >= mid && value <= hi ? '命中' : '偏离';
+  if (sieve === 4.75) return Math.abs(value - mid) <= (hi - lo) * 0.12 ? '命中' : '偏离';
+  if (sieve === 2.36) return value >= mid && value <= hi ? '命中' : '偏离';
+  if (sieve < 2.36) return value >= lo && value <= mid ? '命中' : '偏离';
+  return '不适用';
 }
 
 function ReviewTile({ icon: Icon, label, value, tone }: { icon: React.ComponentType<{ className?: string }>; label: string; value: string; tone: 'good' | 'warn' | 'bad' | 'neutral' }) {

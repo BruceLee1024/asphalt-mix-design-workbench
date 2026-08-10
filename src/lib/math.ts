@@ -44,18 +44,19 @@ export function interpTarget(xs: number[], ys: number[], target: number): number
   return null;
 }
 
-export function calculateBlendGradation(materials: MaterialSource[]): BlendDesign {
-  const total = materials.reduce((sum, m) => sum + Math.max(0, m.proportion || 0), 0);
-  const sieveCount = materials[0]?.passRates.length ?? 0;
+export function calculateBlendGradation(materials: MaterialSource[], rap?: SpecialtyParameters['rap']): BlendDesign {
+  const sources = blendSources(materials, rap);
+  const total = sources.reduce((sum, m) => sum + Math.max(0, m.proportion || 0), 0);
+  const sieveCount = sources[0]?.passRates.length ?? materials[0]?.passRates.length ?? 0;
   const passRates = Array.from({ length: sieveCount }, (_, i) => {
     if (!total) return 0;
-    const value = materials.reduce((sum, m) => sum + (m.passRates[i] ?? 0) * Math.max(0, m.proportion || 0), 0) / total;
+    const value = sources.reduce((sum, m) => sum + (m.passRates[i] ?? 0) * Math.max(0, m.proportion || 0), 0) / total;
     return round(value, 1);
   });
 
   const warnings: string[] = [];
   if (Math.abs(total - 100) > 0.2) warnings.push(`材料比例合计为 ${round(total, 1)}%，建议调整为 100%。`);
-  materials.forEach(m => {
+  sources.forEach(m => {
     if (m.passRates.length !== sieveCount) warnings.push(`${m.name} 的筛孔数据不完整。`);
   });
 
@@ -82,14 +83,18 @@ export function validateGradation(
   return warnings;
 }
 
-export function fitBlendToMidpoint(materials: MaterialSource[], spec: { lo: readonly number[]; hi: readonly number[] }): MaterialSource[] {
+export function fitBlendToMidpoint(materials: MaterialSource[], spec: { lo: readonly number[]; hi: readonly number[]; sieves?: readonly number[] }, rap?: SpecialtyParameters['rap']): MaterialSource[] {
   if (materials.length === 0) return materials;
-  const mids = spec.lo.map((lo, i) => (lo + spec.hi[i]) / 2);
-  let props = materials.map(m => Math.max(0, m.proportion || 0));
-  props = normalizeProps(props);
+  const editableIndexes = materials.map((m, index) => m.type !== 'rap' || !rap?.enabled ? index : -1).filter(index => index >= 0);
+  if (!editableIndexes.length) return materials;
+  const editable = editableIndexes.map(index => materials[index]);
+  const fixed = rapBlendSources(rap);
+  const target = productionTargets(spec);
+  const editableTotal = Math.max(0, 100 - fixed.reduce((sum, item) => sum + item.proportion, 0));
+  let props = normalizeProps(editable.map(m => Math.max(0, m.proportion || 0)), editableTotal);
 
   let step = 12;
-  let bestScore = blendScore(materials, props, mids);
+  let bestScore = blendScore([...editable, ...fixed], [...props, ...fixed.map(item => item.proportion)], target);
   for (let pass = 0; pass < 80; pass++) {
     let improved = false;
     for (let i = 0; i < props.length; i++) {
@@ -98,7 +103,7 @@ export function fitBlendToMidpoint(materials: MaterialSource[], spec: { lo: read
         const next = [...props];
         next[i] += step;
         next[j] -= step;
-        const score = blendScore(materials, next, mids);
+        const score = blendScore([...editable, ...fixed], [...next, ...fixed.map(item => item.proportion)], target);
         if (score < bestScore) {
           props = next;
           bestScore = score;
@@ -110,8 +115,17 @@ export function fitBlendToMidpoint(materials: MaterialSource[], spec: { lo: read
     if (step < 0.05) break;
   }
 
-  props = normalizeProps(props);
-  return materials.map((m, i) => ({ ...m, proportion: round(props[i], 1) }));
+  props = normalizeProps(props, editableTotal);
+  return materials.map((material, index) => {
+    const editableIndex = editableIndexes.indexOf(index);
+    return editableIndex < 0 ? material : { ...material, proportion: round(props[editableIndex], 1) };
+  });
+}
+
+export function calculateBinderBalance(oac: number, rap: SpecialtyParameters['rap']) {
+  const recycledAsphalt = rap.enabled ? round(rap.content * rap.asphaltContent / 100, 3) : 0;
+  const virginAsphalt = round(oac - recycledAsphalt, 3);
+  return { targetOac: round(oac, 3), recycledAsphalt, virginAsphalt, ok: virginAsphalt >= 0 };
 }
 
 export function calculateVolumetrics(point: MarshallPoint, basicInfo: Pick<BasicInfo, 'gammaSb'>): MarshallPoint {
@@ -377,19 +391,48 @@ export function round(value: number, digits: number): number {
   return Math.round((value + Number.EPSILON) * m) / m;
 }
 
-function normalizeProps(props: number[]): number[] {
+function normalizeProps(props: number[], target = 100): number[] {
   const total = props.reduce((sum, p) => sum + Math.max(0, p), 0);
-  if (!total) return props.map((_, i) => (i === 0 ? 100 : 0));
-  const normalized = props.map(p => Math.max(0, p) / total * 100);
-  const drift = 100 - normalized.reduce((sum, p) => sum + p, 0);
+  if (!total) return props.map((_, i) => (i === 0 ? target : 0));
+  const normalized = props.map(p => Math.max(0, p) / total * target);
+  const drift = target - normalized.reduce((sum, p) => sum + p, 0);
   normalized[normalized.length - 1] += drift;
   return normalized;
 }
 
-function blendScore(materials: MaterialSource[], props: number[], target: number[]): number {
+function blendScore(materials: Array<Pick<MaterialSource, 'passRates'>>, props: number[], target: number[]): number {
   const total = props.reduce((sum, p) => sum + p, 0) || 1;
   return target.reduce((sum, t, i) => {
     const v = materials.reduce((s, m, mi) => s + (m.passRates[i] ?? 0) * props[mi], 0) / total;
     return sum + (v - t) ** 2;
   }, 0);
+}
+
+function blendSources(materials: MaterialSource[], rap?: SpecialtyParameters['rap']): Array<Pick<MaterialSource, 'name' | 'proportion' | 'passRates'>> {
+  const native = rap?.enabled ? materials.filter(material => material.type !== 'rap') : materials;
+  return [...native, ...rapBlendSources(rap)];
+}
+
+function rapBlendSources(rap?: SpecialtyParameters['rap']): Array<Pick<MaterialSource, 'name' | 'proportion' | 'passRates'>> {
+  if (!rap?.enabled || rap.content <= 0) return [];
+  const fractions = rap.fractions?.length ? rap.fractions : [];
+  if (!fractions.length) return [];
+  return fractions.map(fraction => ({
+    name: `RAP ${fraction.label}`,
+    proportion: rap.content * Math.max(0, fraction.yield) / 100,
+    passRates: fraction.passRates,
+  }));
+}
+
+function productionTargets(spec: { lo: readonly number[]; hi: readonly number[]; sieves?: readonly number[] }) {
+  return spec.lo.map((lo, index) => {
+    const hi = spec.hi[index];
+    const mid = (lo + hi) / 2;
+    const sieve = spec.sieves?.[index];
+    if (sieve === 9.5) return (mid + hi) / 2;
+    if (sieve === 4.75) return mid;
+    if (sieve === 2.36) return mid + (hi - mid) * 0.2;
+    if (sieve !== undefined && sieve < 2.36) return (lo + mid) / 2;
+    return mid;
+  });
 }

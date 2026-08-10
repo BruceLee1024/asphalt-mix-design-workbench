@@ -26,6 +26,7 @@ export function ReportStep({ onOpenAi }: { onOpenAi: (prefill: string) => void }
     reviewIssues,
     specialtyParams,
     specialtyChecks,
+    binderBalance,
     constructionGuidance,
     knowledgeVersion,
     projectReadiness,
@@ -148,6 +149,10 @@ export function ReportStep({ onOpenAi }: { onOpenAi: (prefill: string) => void }
             {oacResult ? (
               <div className="bg-surface2 border border-border rounded-lg overflow-hidden">
                 <Row k="最佳油石比 OAC" v={`${oacResult.oac.toFixed(2)} %`} className="text-amber" />
+                {binderBalance && specialtyParams.rap.enabled && <>
+                  <Row k="RAP 旧沥青贡献" v={`${binderBalance.recycledAsphalt.toFixed(3)} %`} />
+                  <Row k="应添加新沥青" v={`${binderBalance.virginAsphalt.toFixed(3)} %`} className={binderBalance.ok ? '' : 'text-red'} />
+                </>}
                 <Row k="马歇尔稳定度" v={`${oacResult.ms.toFixed(1)} kN`} />
                 <Row k="流值" v={`${oacResult.fl.toFixed(0)} ×0.1mm`} />
                 <Row k="空隙率 VV" v={`${oacResult.vv.toFixed(1)} %`} />
@@ -265,7 +270,8 @@ export function ReportStep({ onOpenAi }: { onOpenAi: (prefill: string) => void }
           )) : (
             <Row k="施工建议" v="当前材料体系无额外知识库施工建议，按项目规范和现场试拌结果控制。" />
           )}
-          <Row k="RAP 参数" v={`掺量 ${specialtyParams.rap.content}% / 含水率 ${specialtyParams.rap.moisture}% / 最大粒径 ${specialtyParams.rap.maxParticleSize}mm`} />
+          <Row k="RAP 参数" v={`掺量 ${specialtyParams.rap.content}% / 旧沥青 ${specialtyParams.rap.asphaltContent}% / 含水率 ${specialtyParams.rap.moisture}% / 最大粒径 ${specialtyParams.rap.maxParticleSize}mm`} />
+          {specialtyParams.rap.enabled && <Row k="RAP 分档" v={specialtyParams.rap.fractions.map(fraction => `${fraction.label} ${fraction.yield}%（有效 ${(specialtyParams.rap.content * fraction.yield / 100).toFixed(1)}%）`).join(' / ')} />}
         </div>
 
         <SLabel className="mb-3">合成级配</SLabel>
